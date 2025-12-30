@@ -1,0 +1,361 @@
+import React, { useState, useEffect } from 'react';
+import { Trash2, Calculator, Settings2, ChevronUp, ChevronDown, GripVertical, User, CreditCard, ReceiptText } from 'lucide-react';
+
+const App = () => {
+  const members = ['Kong', 'Shing', 'Angus'];
+  const APP_STORAGE_KEY = 'japan_trip_expenses_v3';
+
+  // --- 狀態管理 (初始化時嘗試從 LocalStorage 讀取) ---
+  const [expenses, setExpenses] = useState(() => {
+    const saved = localStorage.getItem(`${APP_STORAGE_KEY}_list`);
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [rate, setRate] = useState(() => {
+    const saved = localStorage.getItem(`${APP_STORAGE_KEY}_rate`);
+    return saved ? parseFloat(saved) : 0.051;
+  });
+
+  const [digits, setDigits] = useState([0, 0, 0, 0, 0, 0]);
+  const [description, setDescription] = useState('');
+  const [currency, setCurrency] = useState('YEN'); 
+  const [paidBy, setPaidBy] = useState('Kong'); 
+  const [sharedBy, setSharedBy] = useState(['Kong', 'Shing', 'Angus']); 
+  const [showResult, setShowResult] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState(null);
+
+  // --- 自動儲存邏輯 ---
+  useEffect(() => {
+    localStorage.setItem(`${APP_STORAGE_KEY}_list`, JSON.stringify(expenses));
+  }, [expenses]);
+
+  useEffect(() => {
+    localStorage.setItem(`${APP_STORAGE_KEY}_rate`, rate.toString());
+  }, [rate]);
+
+  // 計算當前 picker 的總額
+  const currentAmount = digits.reduce((acc, digit, idx) => acc + digit * Math.pow(10, 5 - idx), 0);
+
+  const updateDigit = (index, delta) => {
+    setDigits(prev => {
+      const newDigits = [...prev];
+      let newVal = newDigits[index] + delta;
+      if (newVal > 9) newVal = 0;
+      if (newVal < 0) newVal = 9;
+      newDigits[index] = newVal;
+      return newDigits;
+    });
+    setShowResult(false);
+  };
+
+  const addExpense = () => {
+    if (!description || currentAmount === 0 || sharedBy.length === 0) {
+      alert("請填寫項目名、金額（不能為0）並選擇享用者");
+      return;
+    }
+
+    const newExpense = {
+      id: Date.now(),
+      description,
+      amount: currentAmount,
+      currency,
+      paidBy,
+      sharedBy: [...sharedBy]
+    };
+
+    setExpenses([...expenses, newExpense]);
+    setDescription('');
+    setDigits([0, 0, 0, 0, 0, 0]); 
+    setShowResult(false);
+  };
+
+  const removeExpense = (id) => {
+    if (window.confirm('確定要刪除這筆開支嗎？')) {
+      setExpenses(expenses.filter(e => e.id !== id));
+      setShowResult(false);
+    }
+  };
+
+  const handleSharedByChange = (name) => {
+    if (sharedBy.includes(name)) {
+      setSharedBy(sharedBy.filter(n => n !== name));
+    } else {
+      setSharedBy([...sharedBy, name]);
+    }
+  };
+
+  // --- 拖放邏輯 ---
+  const onDragStart = (e, index) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const onDragOver = (e, index) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+    
+    const newExpenses = [...expenses];
+    const itemToMove = newExpenses.splice(draggedIndex, 1)[0];
+    newExpenses.splice(index, 0, itemToMove);
+    
+    setDraggedIndex(index);
+    setExpenses(newExpenses);
+    setShowResult(false);
+  };
+
+  const onDragEnd = () => {
+    setDraggedIndex(null);
+  };
+
+  const calculateSettlement = () => {
+    let individualExpenses = { Kong: 0, Shing: 0, Angus: 0 }; 
+    let totalPaid = { Kong: 0, Shing: 0, Angus: 0 };        
+    let totalInHKD = 0;
+
+    expenses.forEach(exp => {
+      const amountInHKD = exp.currency === 'YEN' ? exp.amount * rate : exp.amount;
+      totalInHKD += amountInHKD;
+      totalPaid[exp.paidBy] += amountInHKD;
+      
+      const perPerson = amountInHKD / exp.sharedBy.length;
+      exp.sharedBy.forEach(person => {
+        individualExpenses[person] += perPerson;
+      });
+    });
+
+    let balances = {};
+    members.forEach(m => {
+      balances[m] = totalPaid[m] - individualExpenses[m];
+    });
+
+    let debtors = [];
+    let creditors = [];
+    Object.keys(balances).forEach(p => {
+      if (balances[p] < -0.01) debtors.push({ name: p, amount: Math.abs(balances[p]) });
+      else if (balances[p] > 0.01) creditors.push({ name: p, amount: balances[p] });
+    });
+
+    let transfers = [];
+    let d = 0, c = 0;
+    while (d < debtors.length && c < creditors.length) {
+      let tAmount = Math.min(debtors[d].amount, creditors[c].amount);
+      transfers.push({ from: debtors[d].name, to: creditors[c].name, amount: tAmount });
+      debtors[d].amount -= tAmount;
+      creditors[c].amount -= tAmount;
+      if (debtors[d].amount < 0.01) d++;
+      if (creditors[c].amount < 0.01) c++;
+    }
+
+    return { transfers, balances, totalInHKD, individualExpenses, totalPaid };
+  };
+
+  const settlementResult = calculateSettlement();
+
+  return (
+    <div className="max-w-xl mx-auto p-4 bg-white min-h-screen border-x shadow-sm font-sans mb-12 text-slate-900">
+      <h1 className="text-xl font-bold border-b-2 border-black pb-2 mb-6 text-center tracking-tight">日本旅遊開支計算機</h1>
+
+      {/* 1. 輸入區 */}
+      <div className="space-y-6 border-2 border-slate-100 p-5 rounded-2xl bg-slate-50 mb-8">
+        <h2 className="font-black text-sm uppercase tracking-wider text-slate-400 mb-2">新增開支項目</h2>
+        
+        <div className="flex flex-col gap-1">
+          <label className="font-bold text-sm">項目名：</label>
+          <input 
+            type="text" 
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="例如: 拉麵 / 車費"
+            className="border-2 p-3 rounded-xl w-full focus:ring-2 focus:ring-blue-500 outline-none border-slate-200 bg-white"
+          />
+        </div>
+
+        {/* 6位數滾輪金額選擇器 */}
+        <div className="flex flex-col gap-2">
+          <label className="font-bold text-sm">金額 (000,000)：</label>
+          <div className="flex justify-between gap-1 bg-slate-200 p-2 rounded-2xl shadow-inner">
+            {digits.map((d, idx) => (
+              <div key={idx} className="flex flex-col items-center flex-1 bg-white rounded-xl pb-1 shadow-sm">
+                <button type="button" onClick={() => updateDigit(idx, 1)} className="w-full flex justify-center py-2 text-slate-300 hover:text-blue-600 transition-colors"><ChevronUp size={20} strokeWidth={3} /></button>
+                <div className="text-2xl font-black font-mono py-1 select-none text-slate-800">{d}</div>
+                <button type="button" onClick={() => updateDigit(idx, -1)} className="w-full flex justify-center py-2 text-slate-300 hover:text-blue-600 transition-colors"><ChevronDown size={20} strokeWidth={3} /></button>
+              </div>
+            ))}
+          </div>
+          <div className="text-right px-1">
+            <span className="font-mono font-black text-blue-600 text-lg">{currentAmount.toLocaleString()}</span>
+            <span className="text-xs font-bold text-slate-400 ml-1">{currency}</span>
+          </div>
+        </div>
+
+        {/* Tick 幣值 */}
+        <div className="flex flex-col gap-1">
+          <label className="font-bold text-sm">Tick 幣值：</label>
+          <div className="flex gap-8">
+            {['HKD', 'YEN'].map(c => (
+              <label key={c} className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="currency" checked={currency === c} onChange={() => setCurrency(c)} className="w-5 h-5 accent-blue-600" />
+                <span className={`font-bold ${currency === c ? 'text-blue-600' : 'text-slate-400'}`}>{c}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Tick 支付者 */}
+        <div className="flex flex-col gap-1">
+          <label className="font-bold text-sm text-slate-500">Tick 邊個畀錢：</label>
+          <div className="flex gap-8">
+            {members.map(m => (
+              <label key={m} className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="paidBy" checked={paidBy === m} onChange={() => setPaidBy(m)} className="w-5 h-5 accent-blue-600" />
+                <span className={`font-bold ${paidBy === m ? 'text-blue-600' : 'text-slate-400'}`}>{m}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Tick 享用者 */}
+        <div className="flex flex-col gap-1">
+          <label className="font-bold text-sm text-slate-500">Tick 邊個有份享用：</label>
+          <div className="flex gap-8">
+            {members.map(m => (
+              <label key={m} className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={sharedBy.includes(m)} onChange={() => handleSharedByChange(m)} className="w-5 h-5 accent-green-600" />
+                <span className={`font-bold ${sharedBy.includes(m) ? 'text-green-600' : 'text-slate-400'}`}>{m}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <button onClick={addExpense} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-[0.98]">加入列表</button>
+      </div>
+
+      {/* 2. 開支清單 */}
+      <div className="mb-8">
+        <h2 className="font-black text-sm uppercase tracking-wider text-slate-400 mb-3 px-1 flex justify-between">
+          <span>目前開支清單 ({expenses.length})</span>
+          <span className="text-[10px] font-bold text-slate-300 italic">★ 已自動儲存至手機</span>
+        </h2>
+        <div className="space-y-3">
+          {expenses.map((e, index) => (
+            <div key={e.id} draggable onDragStart={(event) => onDragStart(event, index)} onDragOver={(event) => onDragOver(event, index)} onDragEnd={onDragEnd} className={`bg-white p-4 border-2 rounded-2xl flex justify-between items-center shadow-sm transition-all cursor-move ${draggedIndex === index ? 'opacity-40 border-blue-400 border-dashed' : 'border-slate-50'}`}>
+              <div className="flex items-center gap-4">
+                <div className="flex flex-col items-center"><GripVertical size={16} className="text-slate-300 mb-1" /><span className="font-black text-[10px] text-slate-300 italic">No.{index + 1}</span></div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded text-white uppercase ${e.paidBy === 'Kong' ? 'bg-blue-500' : e.paidBy === 'Shing' ? 'bg-purple-500' : 'bg-orange-500'}`}>{e.paidBy}</span>
+                    <span className="font-bold text-slate-800">{e.description}</span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1 font-medium">{e.amount.toLocaleString()} {e.currency} | 分擔: {e.sharedBy.join(', ')}</p>
+                </div>
+              </div>
+              <button onClick={() => removeExpense(e.id)} className="text-slate-200 hover:text-red-500 p-2"><Trash2 size={18}/></button>
+            </div>
+          ))}
+          {expenses.length === 0 && <p className="text-center py-8 text-slate-300 italic text-sm border-2 border-dashed border-slate-100 rounded-2xl">未有任何項目</p>}
+        </div>
+        {expenses.length > 0 && (
+          <button 
+            onClick={() => { if(window.confirm('確定要清空所有紀錄嗎？')) { setExpenses([]); localStorage.clear(); } }}
+            className="mt-4 text-[10px] font-bold text-red-300 uppercase tracking-widest block mx-auto hover:text-red-500"
+          >
+            清空所有紀錄
+          </button>
+        )}
+      </div>
+
+      {/* 3. 匯率設定 */}
+      {expenses.length > 0 && (
+        <div className="mb-6 p-5 bg-amber-50 border-2 border-amber-200 rounded-[2rem]">
+          <div className="flex items-center gap-2 mb-4"><Settings2 size={18} className="text-amber-600" /><h2 className="font-black text-sm uppercase tracking-widest text-amber-900">最後確認匯率</h2></div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold text-amber-800 tracking-tight">1 YEN 兌換為</span>
+            <div className="flex items-center gap-2 bg-white p-1 pr-3 rounded-xl border border-amber-200 shadow-inner">
+              <input type="number" step="0.0001" value={rate} onChange={(e) => { setRate(parseFloat(e.target.value) || 0); setShowResult(false); }} className="w-20 px-2 py-1 font-mono font-black text-amber-700 outline-none text-right" />
+              <span className="font-black text-amber-900 text-xs">HKD</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. 結算按鈕 */}
+      <div className="mt-4">
+        <button onClick={() => setShowResult(true)} className={`w-full font-black py-5 rounded-[2rem] text-xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3 ${expenses.length > 0 ? 'bg-slate-900 text-white hover:bg-black' : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`} disabled={expenses.length === 0}>
+          <Calculator size={24} strokeWidth={3} /> 撳我計數
+        </button>
+      </div>
+
+      {/* 結算總結頁面 */}
+      {showResult && (
+        <div className="mt-10 p-6 bg-slate-900 text-white rounded-[2.5rem] shadow-2xl animate-in fade-in slide-in-from-top-6 duration-500">
+          <h2 className="text-2xl font-black text-center mb-8 text-white tracking-tighter uppercase italic border-b border-slate-800 pb-4">Trip Summary 結算清單</h2>
+          
+          <div className="space-y-8">
+            <section>
+              <div className="flex items-center gap-2 mb-3 text-indigo-400">
+                <ReceiptText size={20} />
+                <h3 className="font-black text-sm uppercase tracking-widest">1. 個人應付開支 (Expense)</h3>
+              </div>
+              <div className="bg-slate-800 rounded-3xl p-4 space-y-3">
+                {members.map(m => (
+                  <div key={m} className="flex justify-between items-center">
+                    <span className="font-bold text-slate-400">{m}</span>
+                    <span className="font-mono font-black text-lg">${settlementResult.individualExpenses[m].toFixed(1)}</span>
+                  </div>
+                ))}
+                <div className="border-t border-slate-700 pt-2 mt-2 flex justify-between font-black text-indigo-400">
+                  <span>旅程總開支:</span>
+                  <span>${settlementResult.totalInHKD.toFixed(1)}</span>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <div className="flex items-center gap-2 mb-3 text-emerald-400">
+                <CreditCard size={20} />
+                <h3 className="font-black text-sm uppercase tracking-widest">2. 個人已付總額 (Paid Out)</h3>
+              </div>
+              <div className="bg-slate-800 rounded-3xl p-4 space-y-3">
+                {members.map(m => (
+                  <div key={m} className="flex justify-between items-center">
+                    <span className="font-bold text-slate-400">{m}</span>
+                    <span className="font-mono font-black text-lg text-emerald-400">${settlementResult.totalPaid[m].toFixed(1)}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <div className="flex items-center gap-2 mb-3 text-orange-400">
+                <User size={20} />
+                <h3 className="font-black text-sm uppercase tracking-widest">3. 找數指示 (Settlement)</h3>
+              </div>
+              <div className="bg-slate-800 rounded-3xl p-5 space-y-4">
+                {settlementResult.transfers.length > 0 ? (
+                  settlementResult.transfers.map((t, i) => (
+                    <div key={i} className="text-lg border-b border-slate-700 pb-2 last:border-0 last:pb-0">
+                      <span className="font-black text-white">{t.from}</span>
+                      <span className="mx-2 text-slate-400 text-sm">要畀</span>
+                      <span className="font-mono font-black text-orange-400 text-xl tracking-tighter">${t.amount.toFixed(1)}</span>
+                      <span className="mx-1 text-slate-400 text-xs">HKD</span>
+                      <span className="mx-2 text-slate-400 text-sm">予</span>
+                      <span className="font-black text-white">{t.to}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4 text-slate-500 font-bold italic">大家互不相欠</div>
+                )}
+              </div>
+            </section>
+          </div>
+        </div>
+      )}
+
+      <footer className="mt-16 text-center text-slate-300 text-[10px] font-black uppercase tracking-[0.3em] pb-12">
+        Japan Expense Tracker • v3.4 (Auto-Save)
+      </footer>
+    </div>
+  );
+};
+
+export default App;
