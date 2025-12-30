@@ -22,8 +22,6 @@
         body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .select-none { -webkit-user-select: none; user-select: none; }
-        .drag-handle { touch-action: none; cursor: grab; }
-        .drag-handle:active { cursor: grabbing; }
         .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
     </style>
 </head>
@@ -52,7 +50,7 @@
 
         const App = () => {
             const members = ['Kong', 'Shing', 'Angus'];
-            const APP_STORAGE_KEY = 'japan_trip_v4_dark_only';
+            const APP_STORAGE_KEY = 'japan_trip_v5_jpy_dark';
 
             const [expenses, setExpenses] = useState(() => {
                 const saved = localStorage.getItem(`${APP_STORAGE_KEY}_list`);
@@ -65,12 +63,10 @@
 
             const [digits, setDigits] = useState([0, 0, 0, 0, 0, 0]);
             const [description, setDescription] = useState('');
-            const [currency, setCurrency] = useState('YEN'); 
+            const [currency, setCurrency] = useState('JPY'); 
             const [paidBy, setPaidBy] = useState('Kong');
             const [sharedBy, setSharedBy] = useState(['Kong', 'Shing', 'Angus']);
             const [showResult, setShowResult] = useState(false);
-            const dragItem = useRef();
-            const dragOverItem = useRef();
 
             useEffect(() => {
                 localStorage.setItem(`${APP_STORAGE_KEY}_list`, JSON.stringify(expenses));
@@ -117,14 +113,12 @@
                 }
             };
 
-            const handleSort = () => {
-                if (dragItem.current === null || dragOverItem.current === null) return;
-                let _expenses = [...expenses];
-                const draggedItemContent = _expenses.splice(dragItem.current, 1)[0];
-                _expenses.splice(dragOverItem.current, 0, draggedItemContent);
-                dragItem.current = null;
-                dragOverItem.current = null;
-                setExpenses(_expenses);
+            const moveItem = (index, direction) => {
+                const newExpenses = [...expenses];
+                const targetIndex = direction === 'up' ? index - 1 : index + 1;
+                if (targetIndex < 0 || targetIndex >= newExpenses.length) return;
+                [newExpenses[index], newExpenses[targetIndex]] = [newExpenses[targetIndex], newExpenses[index]];
+                setExpenses(newExpenses);
                 setShowResult(false);
             };
 
@@ -134,7 +128,7 @@
                 let totalInHKD = 0;
 
                 expenses.forEach(exp => {
-                    const amountInHKD = exp.currency === 'YEN' ? exp.amount * rate : exp.amount;
+                    const amountInHKD = exp.currency === 'JPY' ? exp.amount * rate : exp.amount;
                     totalInHKD += amountInHKD;
                     totalPaid[exp.paidBy] += amountInHKD;
                     const perPerson = amountInHKD / exp.sharedBy.length;
@@ -168,15 +162,13 @@
             return (
                 <div className="max-w-xl mx-auto p-4 bg-slate-950 min-h-screen border-x border-slate-800 shadow-sm font-sans mb-12 select-none">
                     
-                    {/* Header */}
-                    <div className="flex justify-center items-center border-b-2 border-slate-800 pb-2 mb-6">
+                    <div className="flex justify-center items-center border-b-2 border-slate-800 pb-2 mb-6 text-white">
                         <h1 className="text-xl font-black tracking-tighter italic uppercase text-white">Japan Expense</h1>
                     </div>
 
                     {/* 輸入區 */}
-                    <div className="space-y-6 border-2 border-slate-800 p-5 rounded-[2rem] bg-slate-900 mb-8 shadow-xl transition-all">
+                    <div className="space-y-6 border-2 border-slate-800 p-5 rounded-[2rem] bg-slate-900 mb-8 shadow-xl">
                         
-                        {/* 1. 項目名稱 */}
                         <div>
                             <label className="font-black text-xs uppercase tracking-widest text-slate-500 block mb-1">1. 項目名稱 Item Name</label>
                             <input 
@@ -184,15 +176,14 @@
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="例如：拉麵 / 車票"
-                                className="border-2 border-slate-700 p-3 rounded-xl w-full font-bold focus:bg-slate-800 bg-slate-950 text-white outline-none transition-all text-lg"
+                                className="border-2 border-slate-700 p-3 rounded-xl w-full font-bold focus:bg-slate-800 bg-slate-950 text-white outline-none transition-all text-lg placeholder:text-slate-800"
                             />
                         </div>
 
-                        {/* 2. 幣值選擇 */}
                         <div>
                             <label className="font-black text-xs uppercase tracking-widest text-slate-500 block mb-2">2. 選擇幣值 Currency</label>
                             <div className="flex bg-slate-950 p-1.5 rounded-2xl gap-1 border-2 border-slate-800">
-                                {['YEN', 'HKD'].map(c => (
+                                {['JPY', 'HKD'].map(c => (
                                     <button
                                         key={c}
                                         onClick={() => setCurrency(c)}
@@ -200,13 +191,12 @@
                                             ? 'bg-emerald-600 border-emerald-400 text-white shadow-lg scale-[1.02]' 
                                             : 'text-slate-600'}`}
                                     >
-                                        {c === 'YEN' ? '¥ 日圓' : '$ 港幣'}
+                                        {c === 'JPY' ? '¥ 日圓' : '$ 港幣'}
                                     </button>
                                 ))}
                             </div>
                         </div>
 
-                        {/* 3. 金額選擇器 - Removed (000,000) */}
                         <div className="space-y-2">
                             <label className="font-black text-xs uppercase tracking-widest text-slate-500">3. 金額 Amount</label>
                             <div className="flex justify-between gap-1.5 bg-slate-800 p-2 rounded-2xl shadow-inner">
@@ -218,12 +208,8 @@
                                     </div>
                                 ))}
                             </div>
-                            <div className="text-right mt-1">
-                                <span className="text-xs font-black text-slate-500 italic uppercase">Current: {currentAmount.toLocaleString()} {currency}</span>
-                            </div>
                         </div>
 
-                        {/* 4. 支付者 */}
                         <div className="pt-2 border-t border-slate-800">
                             <label className="font-black text-[10px] uppercase tracking-widest text-slate-500 mb-2 block">4. 邊個畀錢？ Paid By</label>
                             <div className="flex gap-3">
@@ -241,7 +227,6 @@
                             </div>
                         </div>
 
-                        {/* 5. 享用者 */}
                         <div>
                             <label className="font-black text-[10px] uppercase tracking-widest text-slate-500 mb-2 block">5. 邊個有份？ Share By</label>
                             <div className="flex gap-3">
@@ -262,7 +247,7 @@
                         <button onClick={addExpense} className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl hover:bg-indigo-700 active:translate-y-1 shadow-lg border-2 border-indigo-900 uppercase tracking-widest text-lg">加入列表 ADD ITEM</button>
                     </div>
 
-                    {/* 開支清單 */}
+                    {/* 紀錄清單 */}
                     <div className="mb-8">
                         <h2 className="font-black text-xs uppercase tracking-wider text-slate-500 mb-4 px-1 flex justify-between">
                             <span>紀錄 LIST ({expenses.length})</span>
@@ -270,31 +255,24 @@
                         </h2>
                         <div className="space-y-4">
                             {expenses.map((e, index) => (
-                                <div 
-                                    key={e.id}
-                                    draggable
-                                    onDragStart={() => (dragItem.current = index)}
-                                    onDragEnter={() => (dragOverItem.current = index)}
-                                    onDragEnd={handleSort}
-                                    onDragOver={(e) => e.preventDefault()}
-                                    className="bg-slate-900 p-4 border-2 border-slate-800 rounded-2xl flex justify-between items-center shadow-md active:scale-[0.98] transition-all"
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex flex-col items-center drag-handle p-1">
-                                            <Icon name="grip-vertical" size={20} className="text-slate-600" />
-                                            <span className="font-black text-[9px] text-slate-700 mt-1">#{index + 1}</span>
+                                <div key={e.id} className="bg-slate-900 p-5 border-2 border-slate-800 rounded-2xl flex justify-between items-center shadow-md">
+                                    <div className="flex items-center gap-4 flex-1">
+                                        <div className="flex flex-col items-center gap-1 mr-1">
+                                            <button onClick={() => moveItem(index, 'up')} disabled={index === 0} className={`p-1 rounded-md ${index === 0 ? 'text-slate-800' : 'text-slate-400 active:bg-slate-700'}`}><Icon name="chevron-up" size={18} /></button>
+                                            <span className="font-black text-[10px] text-slate-700">#{index + 1}</span>
+                                            <button onClick={() => moveItem(index, 'down')} disabled={index === expenses.length - 1} className={`p-1 rounded-md ${index === expenses.length - 1 ? 'text-slate-800' : 'text-slate-400 active:bg-slate-700'}`}><Icon name="chevron-down" size={18} /></button>
                                         </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[9px] font-black bg-white text-slate-900 px-1.5 py-0.5 rounded uppercase">{e.paidBy}</span>
-                                                <span className="font-black text-sm text-slate-100 uppercase tracking-tight">{e.description}</span>
+                                        
+                                        <div className="flex-1 space-y-4">
+                                            <div className="font-black text-sm text-slate-100 uppercase tracking-tight underline decoration-indigo-500 decoration-2 underline-offset-8">
+                                                {e.description}・{e.amount.toLocaleString()} {e.currency}
                                             </div>
-                                            <p className="text-[10px] text-slate-500 mt-1 font-bold italic">
-                                                {e.amount.toLocaleString()} {e.currency} • 分擔: {e.sharedBy.join('/')}
-                                            </p>
+                                            <div className="font-black text-sm text-slate-100 uppercase tracking-tight underline decoration-emerald-500 decoration-2 underline-offset-8">
+                                                {e.paidBy.toUpperCase()} 出錢・{e.sharedBy.map(p => p.toUpperCase()).join(' / ')} 有份用
+                                            </div>
                                         </div>
                                     </div>
-                                    <button onClick={() => removeExpense(e.id)} className="text-slate-700 hover:text-red-400 p-2"><Icon name="trash-2" size={20} /></button>
+                                    <button onClick={() => removeExpense(e.id)} className="text-slate-700 hover:text-red-400 p-2 ml-2 transition-colors self-start mt-2"><Icon name="trash-2" size={20} /></button>
                                 </div>
                             ))}
                             {expenses.length === 0 && <p className="text-center py-12 text-slate-800 font-black italic border-4 border-dashed border-slate-900 rounded-3xl uppercase tracking-widest">暫無紀錄 No Records</p>}
@@ -309,7 +287,7 @@
                                     <Icon name="settings-2" size={20} />
                                     <h2 className="font-black text-xs uppercase tracking-widest font-bold">目前匯率 RATE</h2>
                                 </div>
-                                <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border-2 border-slate-800">
+                                <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border-2 border-slate-800 text-white">
                                     <span className="text-[10px] font-black text-slate-500 font-bold uppercase">1¥ =</span>
                                     <input type="number" step="0.0001" value={rate} onChange={(e) => { setRate(parseFloat(e.target.value) || 0); setShowResult(false); }} className="w-16 font-mono font-black text-white outline-none text-right text-xs bg-transparent" />
                                     <span className="font-black text-white text-[10px] font-bold uppercase">HKD</span>
@@ -318,15 +296,14 @@
                         </div>
                     )}
 
-                    {/* 計算按鈕 */}
                     <button onClick={() => setShowResult(true)} className={`w-full font-black py-5 rounded-[2rem] text-xl shadow-lg border-2 border-slate-800 transition-all active:translate-y-1 active:shadow-none flex items-center justify-center gap-3 mb-10 ${expenses.length > 0 ? 'bg-white text-slate-950' : 'bg-slate-900 text-slate-700 cursor-not-allowed'}`} disabled={expenses.length === 0}>
                         <Icon name="calculator" size={28} strokeWidth={3} /> 撳我計數 CALCULATE
                     </button>
 
                     {/* 結算結果 */}
                     {showResult && (
-                        <div className="p-8 bg-slate-900 text-white rounded-[3rem] border-2 border-slate-700 mb-10 transition-all animate-in fade-in slide-in-from-bottom-5">
-                            <h2 className="text-3xl font-black text-center mb-10 italic border-b-2 border-slate-800 pb-4 tracking-tighter uppercase underline decoration-emerald-500">Summary 結算</h2>
+                        <div className="p-8 bg-slate-900 text-white rounded-[3rem] border-2 border-slate-700 mb-10 animate-in fade-in slide-in-from-bottom-5 shadow-2xl">
+                            <h2 className="text-3xl font-black text-center mb-10 italic border-b-2 border-slate-700 pb-4 tracking-tighter uppercase underline decoration-emerald-500">Summary 結算</h2>
                             
                             <div className="space-y-10">
                                 <section>
@@ -335,12 +312,12 @@
                                         {members.map(m => (
                                             <div key={m} className="flex justify-between items-end border-b border-slate-800 pb-1">
                                                 <span className="font-black text-slate-500 text-sm uppercase">{m}</span>
-                                                <span className="font-mono font-black text-xl tracking-tighter text-white">${settlementResult.individualExpenses[m].toFixed(1)}</span>
+                                                <span className="font-black text-xl tracking-tighter text-white">${settlementResult.individualExpenses[m].toFixed(1)}</span>
                                             </div>
                                         ))}
                                         <div className="pt-4 flex justify-between font-black text-indigo-300">
                                             <span className="text-xs italic uppercase">旅程總額 TOTAL</span>
-                                            <span className="text-2xl font-bold font-mono">${settlementResult.totalInHKD.toFixed(1)}</span>
+                                            <span className="text-2xl font-bold">${settlementResult.totalInHKD.toFixed(1)}</span>
                                         </div>
                                     </div>
                                 </section>
@@ -351,33 +328,33 @@
                                         {members.map(m => (
                                             <div key={m} className="flex justify-between items-end border-b border-slate-800 pb-1">
                                                 <span className="font-black text-slate-500 text-sm uppercase">{m}</span>
-                                                <span className="font-mono font-black text-xl tracking-tighter font-bold">${settlementResult.totalPaid[m].toFixed(1)}</span>
+                                                <span className="font-black text-xl tracking-tighter font-bold">${settlementResult.totalPaid[m].toFixed(1)}</span>
                                             </div>
                                         ))}
                                     </div>
                                 </section>
 
                                 <section className="bg-slate-950 text-white p-6 rounded-[2rem] border border-slate-800 shadow-inner">
-                                    <h3 className="font-black text-xs text-orange-400 mb-6 tracking-[0.2em] uppercase text-center font-bold">3.找數指示 Settlement</h3>
-                                    <div className="space-y-4">
+                                    <h3 className="font-black text-xs text-orange-400 mb-6 tracking-[0.2em] uppercase text-center font-bold">3. 找數指示 Settlement</h3>
+                                    <div className="space-y-6">
                                         {settlementResult.transfers.length > 0 ? (
                                             settlementResult.transfers.map((t, i) => (
-                                                <div key={i} className="text-center font-black py-4 border-b-2 border-slate-900 last:border-0 transition-all">
-                                                    <span className="text-xl uppercase border-b-4 border-rose-500 inline-block px-2 text-white">{t.from}</span>
-                                                    <span className="mx-2 text-xs italic text-slate-500 font-bold uppercase">要畀</span>
-                                                    <span className="text-2xl font-mono text-white tracking-tighter bg-yellow-900/30 px-2 font-bold italic">${t.amount.toFixed(1)}</span>
-                                                    <span className="mx-1 text-[10px] text-slate-500 font-bold uppercase">HKD</span>
-                                                    <span className="mx-2 text-xs italic text-slate-500 font-bold uppercase">予</span>
-                                                    <span className="text-xl uppercase border-b-4 border-emerald-400 inline-block px-2 text-white">{t.to}</span>
+                                                <div key={i} className="text-center font-bold py-4 border-b border-slate-900 last:border-0">
+                                                    <span className="text-lg underline decoration-rose-500 decoration-2 underline-offset-8 px-1 uppercase">{t.from}</span>
+                                                    <span className="mx-2 text-slate-400 font-normal">畀</span>
+                                                    <span className="text-2xl text-white italic tracking-tighter font-black">${t.amount.toFixed(1)}</span>
+                                                    <span className="mx-1 text-[10px] text-slate-500 uppercase">HKD</span>
+                                                    <span className="mx-2 text-slate-400 font-normal">予</span>
+                                                    <span className="text-lg underline decoration-emerald-500 decoration-2 underline-offset-8 px-1 uppercase">{t.to}</span>
                                                 </div>
                                             ))
                                         ) : (
-                                            <div className="text-center py-10 text-slate-700 font-black italic tracking-widest uppercase">大家互不相欠</div>
+                                            <div className="text-center py-10 text-slate-700 font-black italic tracking-widest uppercase text-xs">大家互不相欠</div>
                                         )}
                                     </div>
                                 </section>
                             </div>
-                            <button onClick={() => { if(confirm('清空紀錄？清咗就冇晒㗎喇。')) { localStorage.clear(); window.location.reload(); }}} className="mt-12 w-full text-[10px] font-black text-slate-700 hover:text-red-400 uppercase tracking-[0.4em] font-bold">清空紀錄 Clear History</button>
+                            <button onClick={() => { if(confirm('清空紀錄？清咗就冇晒㗎喇。')) { localStorage.clear(); window.location.reload(); }}} className="mt-12 w-full text-[10px] font-black text-slate-700 hover:text-red-400 uppercase tracking-[0.4em] font-bold py-4 transition-colors">清空紀錄 Clear History</button>
                         </div>
                     )}
 
