@@ -1,11 +1,16 @@
 <!DOCTYPE html>
-<html lang="zh-HK">
+<html lang="zh-HK" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>日本旅遊開支計算機 v4.1</title>
+    <title>日本旅遊開支計算機</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
     <!-- React & Babel for Browser -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -16,23 +21,22 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        /* 防止手機長按選中文字 */
         .select-none { -webkit-user-select: none; user-select: none; }
+        .drag-handle { touch-action: none; cursor: grab; }
+        .drag-handle:active { cursor: grabbing; }
+        .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
     </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-slate-950 text-slate-100">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- 修正後的 Lucide 圖標組件 ---
         const Icon = ({ name, size = 20, strokeWidth = 2, className = "" }) => {
             const iconRef = useRef(null);
-
             useEffect(() => {
                 if (window.lucide && iconRef.current) {
-                    // 使用官方建議的 createIcons 方式渲染到特定節點
                     window.lucide.createIcons({
                         attrs: {
                             size: size,
@@ -43,15 +47,13 @@
                     });
                 }
             }, [name, size, strokeWidth, className]);
-
             return <i ref={iconRef} data-lucide={name} className={className} style={{ width: size, height: size, display: 'inline-block' }}></i>;
         };
 
         const App = () => {
             const members = ['Kong', 'Shing', 'Angus'];
-            const APP_STORAGE_KEY = 'japan_trip_v4_fixed';
+            const APP_STORAGE_KEY = 'japan_trip_v4_dark_only';
 
-            // --- 狀態初始化 ---
             const [expenses, setExpenses] = useState(() => {
                 const saved = localStorage.getItem(`${APP_STORAGE_KEY}_list`);
                 return saved ? JSON.parse(saved) : [];
@@ -63,14 +65,13 @@
 
             const [digits, setDigits] = useState([0, 0, 0, 0, 0, 0]);
             const [description, setDescription] = useState('');
-            const [currency, setCurrency] = useState('YEN');
+            const [currency, setCurrency] = useState('YEN'); 
             const [paidBy, setPaidBy] = useState('Kong');
             const [sharedBy, setSharedBy] = useState(['Kong', 'Shing', 'Angus']);
             const [showResult, setShowResult] = useState(false);
             const dragItem = useRef();
             const dragOverItem = useRef();
 
-            // --- 自動儲存 ---
             useEffect(() => {
                 localStorage.setItem(`${APP_STORAGE_KEY}_list`, JSON.stringify(expenses));
             }, [expenses]);
@@ -92,7 +93,7 @@
 
             const addExpense = () => {
                 if (!description || currentAmount === 0 || sharedBy.length === 0) {
-                    alert("請輸入項目名、金額，並 Tick 返享用者");
+                    alert("請輸入項目名、金額，並勾選享用者");
                     return;
                 }
                 const newExpense = {
@@ -117,6 +118,7 @@
             };
 
             const handleSort = () => {
+                if (dragItem.current === null || dragOverItem.current === null) return;
                 let _expenses = [...expenses];
                 const draggedItemContent = _expenses.splice(dragItem.current, 1)[0];
                 _expenses.splice(dragOverItem.current, 0, draggedItemContent);
@@ -164,75 +166,107 @@
             const settlementResult = calculateSettlement();
 
             return (
-                <div className="max-w-xl mx-auto p-4 bg-white min-h-screen border-x shadow-sm font-sans mb-12 text-slate-900 select-none">
-                    <h1 className="text-xl font-black border-b-4 border-slate-900 pb-2 mb-6 text-center tracking-tighter italic uppercase">Japan Expense v4.1</h1>
+                <div className="max-w-xl mx-auto p-4 bg-slate-950 min-h-screen border-x border-slate-800 shadow-sm font-sans mb-12 select-none">
+                    
+                    {/* Header */}
+                    <div className="flex justify-center items-center border-b-2 border-slate-800 pb-2 mb-6">
+                        <h1 className="text-xl font-black tracking-tighter italic uppercase text-white">Japan Expense</h1>
+                    </div>
 
                     {/* 輸入區 */}
-                    <div className="space-y-6 border-4 border-slate-900 p-5 rounded-[2rem] bg-white mb-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                    <div className="space-y-6 border-2 border-slate-800 p-5 rounded-[2rem] bg-slate-900 mb-8 shadow-xl transition-all">
+                        
+                        {/* 1. 項目名稱 */}
                         <div>
-                            <label className="font-black text-xs uppercase tracking-widest text-slate-400 block mb-1">項目名稱</label>
+                            <label className="font-black text-xs uppercase tracking-widest text-slate-500 block mb-1">1. 項目名稱 Item Name</label>
                             <input 
                                 type="text" 
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
-                                placeholder="例如：拉麵"
-                                className="border-2 border-slate-900 p-3 rounded-xl w-full font-bold focus:bg-yellow-50 outline-none"
+                                placeholder="例如：拉麵 / 車票"
+                                className="border-2 border-slate-700 p-3 rounded-xl w-full font-bold focus:bg-slate-800 bg-slate-950 text-white outline-none transition-all text-lg"
                             />
                         </div>
 
-                        {/* 金額選擇器 */}
+                        {/* 2. 幣值選擇 */}
+                        <div>
+                            <label className="font-black text-xs uppercase tracking-widest text-slate-500 block mb-2">2. 選擇幣值 Currency</label>
+                            <div className="flex bg-slate-950 p-1.5 rounded-2xl gap-1 border-2 border-slate-800">
+                                {['YEN', 'HKD'].map(c => (
+                                    <button
+                                        key={c}
+                                        onClick={() => setCurrency(c)}
+                                        className={`flex-1 py-4 rounded-xl font-black text-xl transition-all ${currency === c 
+                                            ? 'bg-emerald-600 border-emerald-400 text-white shadow-lg scale-[1.02]' 
+                                            : 'text-slate-600'}`}
+                                    >
+                                        {c === 'YEN' ? '¥ 日圓' : '$ 港幣'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 3. 金額選擇器 - Removed (000,000) */}
                         <div className="space-y-2">
-                            <label className="font-black text-xs uppercase tracking-widest text-slate-400">金額 (000,000)</label>
-                            <div className="flex justify-between gap-1.5 bg-slate-900 p-2 rounded-2xl">
+                            <label className="font-black text-xs uppercase tracking-widest text-slate-500">3. 金額 Amount</label>
+                            <div className="flex justify-between gap-1.5 bg-slate-800 p-2 rounded-2xl shadow-inner">
                                 {digits.map((d, idx) => (
-                                    <div key={idx} className="flex flex-col items-center flex-1 bg-white rounded-lg overflow-hidden border border-slate-200">
-                                        <button onClick={() => updateDigit(idx, 1)} className="w-full flex justify-center py-2 bg-slate-50 active:bg-yellow-200"><Icon name="chevron-up" size={18} strokeWidth={4} className="text-slate-400"/></button>
-                                        <div className="text-2xl font-black font-mono py-1.5 text-slate-900">{d}</div>
-                                        <button onClick={() => updateDigit(idx, -1)} className="w-full flex justify-center py-2 bg-slate-50 active:bg-yellow-200"><Icon name="chevron-down" size={18} strokeWidth={4} className="text-slate-400"/></button>
+                                    <div key={idx} className="flex flex-col items-center flex-1 bg-slate-950 rounded-lg overflow-hidden border border-slate-700">
+                                        <button onClick={() => updateDigit(idx, 1)} className="w-full flex justify-center py-2 bg-slate-900 active:bg-yellow-600 transition-colors"><Icon name="chevron-up" size={18} strokeWidth={4} className="text-slate-500"/></button>
+                                        <div className="text-2xl font-black font-mono py-1.5 text-white">{d}</div>
+                                        <button onClick={() => updateDigit(idx, -1)} className="w-full flex justify-center py-2 bg-slate-900 active:bg-yellow-600 transition-colors"><Icon name="chevron-down" size={18} strokeWidth={4} className="text-slate-500"/></button>
                                     </div>
                                 ))}
                             </div>
-                            <div className="flex justify-between items-center px-1">
-                                <span className="text-[10px] font-black text-slate-400 italic">目前總額: {currentAmount.toLocaleString()}</span>
-                                <div className="flex gap-4">
-                                    {['HKD', 'YEN'].map(c => (
-                                        <label key={c} className="flex items-center gap-1.5 cursor-pointer">
-                                            <input type="radio" checked={currency === c} onChange={() => setCurrency(c)} className="w-4 h-4 accent-slate-900" />
-                                            <span className={`text-xs font-black ${currency === c ? 'text-slate-900' : 'text-slate-300'}`}>{c}</span>
-                                        </label>
-                                    ))}
-                                </div>
+                            <div className="text-right mt-1">
+                                <span className="text-xs font-black text-slate-500 italic uppercase">Current: {currentAmount.toLocaleString()} {currency}</span>
                             </div>
                         </div>
 
-                        {/* 支付者 */}
-                        <div className="pt-2 border-t border-slate-100">
-                            <label className="font-black text-[10px] uppercase tracking-widest text-slate-400 mb-2 block">邊個畀錢？</label>
+                        {/* 4. 支付者 */}
+                        <div className="pt-2 border-t border-slate-800">
+                            <label className="font-black text-[10px] uppercase tracking-widest text-slate-500 mb-2 block">4. 邊個畀錢？ Paid By</label>
                             <div className="flex gap-3">
                                 {members.map(m => (
-                                    <button key={m} onClick={() => setPaidBy(m)} className={`flex-1 py-2 rounded-xl font-black text-xs uppercase border-2 transition-all ${paidBy === m ? 'border-slate-900 bg-slate-900 text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,0.1)]' : 'border-slate-100 text-slate-300'}`}>{m}</button>
+                                    <button 
+                                        key={m} 
+                                        onClick={() => setPaidBy(m)} 
+                                        className={`flex-1 py-3 rounded-xl font-black text-sm uppercase border-2 transition-all ${paidBy === m 
+                                            ? 'bg-emerald-600 border-emerald-400 text-white shadow-md' 
+                                            : 'border-slate-800 bg-slate-950 text-slate-600'}`}
+                                    >
+                                        {m}
+                                    </button>
                                 ))}
                             </div>
                         </div>
 
-                        {/* 享用者 */}
+                        {/* 5. 享用者 */}
                         <div>
-                            <label className="font-black text-[10px] uppercase tracking-widest text-slate-400 mb-2 block">邊個有份？</label>
+                            <label className="font-black text-[10px] uppercase tracking-widest text-slate-500 mb-2 block">5. 邊個有份？ Share By</label>
                             <div className="flex gap-3">
                                 {members.map(m => (
-                                    <button key={m} onClick={() => setSharedBy(prev => prev.includes(m) ? prev.filter(n => n !== m) : [...prev, m])} className={`flex-1 py-2 rounded-xl font-black text-xs uppercase border-2 transition-all ${sharedBy.includes(m) ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-100 text-slate-300'}`}>{m}</button>
+                                    <button 
+                                        key={m} 
+                                        onClick={() => setSharedBy(prev => prev.includes(m) ? prev.filter(n => n !== m) : [...prev, m])} 
+                                        className={`flex-1 py-3 rounded-xl font-black text-sm uppercase border-2 transition-all ${sharedBy.includes(m) 
+                                            ? 'bg-emerald-600 border-emerald-400 text-white shadow-md' 
+                                            : 'border-slate-800 bg-slate-950 text-slate-600'}`}
+                                    >
+                                        {m}
+                                    </button>
                                 ))}
                             </div>
                         </div>
 
-                        <button onClick={addExpense} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 active:translate-y-1 shadow-[0px_4px_0px_0px_rgba(30,58,138,1)] border-2 border-blue-900 uppercase">新增項目 Add Item</button>
+                        <button onClick={addExpense} className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl hover:bg-indigo-700 active:translate-y-1 shadow-lg border-2 border-indigo-900 uppercase tracking-widest text-lg">加入列表 ADD ITEM</button>
                     </div>
 
                     {/* 開支清單 */}
                     <div className="mb-8">
-                        <h2 className="font-black text-xs uppercase tracking-wider text-slate-400 mb-4 px-1 flex justify-between">
-                            <span>開支紀錄 ({expenses.length})</span>
-                            <span className="italic">★ 已自動儲存</span>
+                        <h2 className="font-black text-xs uppercase tracking-wider text-slate-500 mb-4 px-1 flex justify-between">
+                            <span>紀錄 LIST ({expenses.length})</span>
+                            <span className="italic opacity-30">★ AUTO-SAVED</span>
                         </h2>
                         <div className="space-y-4">
                             {expenses.map((e, index) => (
@@ -243,75 +277,77 @@
                                     onDragEnter={() => (dragOverItem.current = index)}
                                     onDragEnd={handleSort}
                                     onDragOver={(e) => e.preventDefault()}
-                                    className="bg-white p-4 border-2 border-slate-900 rounded-2xl flex justify-between items-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:scale-95 transition-transform"
+                                    className="bg-slate-900 p-4 border-2 border-slate-800 rounded-2xl flex justify-between items-center shadow-md active:scale-[0.98] transition-all"
                                 >
                                     <div className="flex items-center gap-4">
-                                        <div className="flex flex-col items-center cursor-grab">
-                                            <Icon name="grip-vertical" size={20} className="text-slate-900" />
-                                            <span className="font-black text-[9px] text-slate-400 mt-1">#{index + 1}</span>
+                                        <div className="flex flex-col items-center drag-handle p-1">
+                                            <Icon name="grip-vertical" size={20} className="text-slate-600" />
+                                            <span className="font-black text-[9px] text-slate-700 mt-1">#{index + 1}</span>
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-[9px] font-black bg-slate-900 text-white px-1.5 py-0.5 rounded uppercase">{e.paidBy}</span>
-                                                <span className="font-black text-sm text-slate-800 uppercase tracking-tight">{e.description}</span>
+                                                <span className="text-[9px] font-black bg-white text-slate-900 px-1.5 py-0.5 rounded uppercase">{e.paidBy}</span>
+                                                <span className="font-black text-sm text-slate-100 uppercase tracking-tight">{e.description}</span>
                                             </div>
-                                            <p className="text-[10px] text-slate-400 mt-1 font-bold">{e.amount.toLocaleString()} {e.currency} • 分擔: {e.sharedBy.join('/')}</p>
+                                            <p className="text-[10px] text-slate-500 mt-1 font-bold italic">
+                                                {e.amount.toLocaleString()} {e.currency} • 分擔: {e.sharedBy.join('/')}
+                                            </p>
                                         </div>
                                     </div>
-                                    <button onClick={() => removeExpense(e.id)} className="text-slate-200 hover:text-red-500 p-2"><Icon name="trash-2" size={20} /></button>
+                                    <button onClick={() => removeExpense(e.id)} className="text-slate-700 hover:text-red-400 p-2"><Icon name="trash-2" size={20} /></button>
                                 </div>
                             ))}
-                            {expenses.length === 0 && <p className="text-center py-12 text-slate-200 font-black italic border-4 border-dashed border-slate-50 rounded-3xl uppercase tracking-widest">暫無紀錄 No Records</p>}
+                            {expenses.length === 0 && <p className="text-center py-12 text-slate-800 font-black italic border-4 border-dashed border-slate-900 rounded-3xl uppercase tracking-widest">暫無紀錄 No Records</p>}
                         </div>
                     </div>
 
-                    {/* 匯率設定 */}
+                    {/* 匯率 */}
                     {expenses.length > 0 && (
-                        <div className="mb-8 p-6 bg-yellow-400 border-4 border-slate-900 rounded-[2rem] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                            <div className="flex items-center justify-between">
+                        <div className="mb-8 p-6 bg-yellow-600 border-2 border-slate-800 rounded-[2rem] shadow-lg">
+                            <div className="flex items-center justify-between text-slate-950">
                                 <div className="flex items-center gap-2">
-                                    <Icon name="settings-2" size={20} className="text-slate-900" />
-                                    <h2 className="font-black text-xs uppercase tracking-widest text-slate-900 underline underline-offset-4 font-bold">匯率設定 Rate</h2>
+                                    <Icon name="settings-2" size={20} />
+                                    <h2 className="font-black text-xs uppercase tracking-widest font-bold">目前匯率 RATE</h2>
                                 </div>
-                                <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border-2 border-slate-900">
-                                    <span className="text-[10px] font-black text-slate-400 font-bold">1¥ =</span>
-                                    <input type="number" step="0.0001" value={rate} onChange={(e) => { setRate(parseFloat(e.target.value) || 0); setShowResult(false); }} className="w-16 font-mono font-black text-slate-900 outline-none text-right text-xs" />
-                                    <span className="font-black text-slate-900 text-[10px] font-bold">HKD</span>
+                                <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border-2 border-slate-800">
+                                    <span className="text-[10px] font-black text-slate-500 font-bold uppercase">1¥ =</span>
+                                    <input type="number" step="0.0001" value={rate} onChange={(e) => { setRate(parseFloat(e.target.value) || 0); setShowResult(false); }} className="w-16 font-mono font-black text-white outline-none text-right text-xs bg-transparent" />
+                                    <span className="font-black text-white text-[10px] font-bold uppercase">HKD</span>
                                 </div>
                             </div>
                         </div>
                     )}
 
                     {/* 計算按鈕 */}
-                    <button onClick={() => setShowResult(true)} className={`w-full font-black py-5 rounded-[2rem] text-xl shadow-[0px_6px_0px_0px_rgba(0,0,0,1)] border-4 border-slate-900 transition-all active:translate-y-1 active:shadow-none flex items-center justify-center gap-3 mb-10 ${expenses.length > 0 ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`} disabled={expenses.length === 0}>
+                    <button onClick={() => setShowResult(true)} className={`w-full font-black py-5 rounded-[2rem] text-xl shadow-lg border-2 border-slate-800 transition-all active:translate-y-1 active:shadow-none flex items-center justify-center gap-3 mb-10 ${expenses.length > 0 ? 'bg-white text-slate-950' : 'bg-slate-900 text-slate-700 cursor-not-allowed'}`} disabled={expenses.length === 0}>
                         <Icon name="calculator" size={28} strokeWidth={3} /> 撳我計數 CALCULATE
                     </button>
 
                     {/* 結算結果 */}
                     {showResult && (
-                        <div className="p-8 bg-slate-900 text-white rounded-[3rem] shadow-2xl border-4 border-white mb-10">
-                            <h2 className="text-3xl font-black text-center mb-10 italic border-b-2 border-slate-700 pb-4 tracking-tighter uppercase">Summary 結算</h2>
+                        <div className="p-8 bg-slate-900 text-white rounded-[3rem] border-2 border-slate-700 mb-10 transition-all animate-in fade-in slide-in-from-bottom-5">
+                            <h2 className="text-3xl font-black text-center mb-10 italic border-b-2 border-slate-800 pb-4 tracking-tighter uppercase underline decoration-emerald-500">Summary 結算</h2>
                             
                             <div className="space-y-10">
                                 <section>
-                                    <h3 className="font-black text-xs text-indigo-400 mb-4 tracking-[0.2em] uppercase">1. 個人應付開支 (Expense)</h3>
+                                    <h3 className="font-black text-xs text-indigo-300 mb-4 tracking-[0.2em] uppercase">1. 個人應付開支 (Expense)</h3>
                                     <div className="space-y-3 px-2">
                                         {members.map(m => (
                                             <div key={m} className="flex justify-between items-end border-b border-slate-800 pb-1">
-                                                <span className="font-black text-slate-500 text-sm">{m}</span>
-                                                <span className="font-mono font-black text-xl tracking-tighter">${settlementResult.individualExpenses[m].toFixed(1)}</span>
+                                                <span className="font-black text-slate-500 text-sm uppercase">{m}</span>
+                                                <span className="font-mono font-black text-xl tracking-tighter text-white">${settlementResult.individualExpenses[m].toFixed(1)}</span>
                                             </div>
                                         ))}
-                                        <div className="pt-4 flex justify-between font-black text-indigo-400">
-                                            <span className="text-xs italic uppercase">旅程總額 Total</span>
-                                            <span className="text-2xl font-bold">${settlementResult.totalInHKD.toFixed(1)}</span>
+                                        <div className="pt-4 flex justify-between font-black text-indigo-300">
+                                            <span className="text-xs italic uppercase">旅程總額 TOTAL</span>
+                                            <span className="text-2xl font-bold font-mono">${settlementResult.totalInHKD.toFixed(1)}</span>
                                         </div>
                                     </div>
                                 </section>
 
                                 <section>
-                                    <h3 className="font-black text-xs text-emerald-400 mb-4 tracking-[0.2em] uppercase">2. 個人已付總額 (Paid Out)</h3>
-                                    <div className="space-y-3 px-2 text-emerald-400">
+                                    <h3 className="font-black text-xs text-emerald-300 mb-4 tracking-[0.2em] uppercase">2. 個人已付總額 (Paid Out)</h3>
+                                    <div className="space-y-3 px-2 text-emerald-300">
                                         {members.map(m => (
                                             <div key={m} className="flex justify-between items-end border-b border-slate-800 pb-1">
                                                 <span className="font-black text-slate-500 text-sm uppercase">{m}</span>
@@ -321,32 +357,32 @@
                                     </div>
                                 </section>
 
-                                <section className="bg-white text-slate-900 p-6 rounded-[2rem]">
-                                    <h3 className="font-black text-xs text-orange-500 mb-6 tracking-[0.2em] uppercase text-center underline underline-offset-8">3. Settlement 找數指示</h3>
+                                <section className="bg-slate-950 text-white p-6 rounded-[2rem] border border-slate-800 shadow-inner">
+                                    <h3 className="font-black text-xs text-orange-400 mb-6 tracking-[0.2em] uppercase text-center font-bold">3.找數指示 Settlement</h3>
                                     <div className="space-y-4">
                                         {settlementResult.transfers.length > 0 ? (
                                             settlementResult.transfers.map((t, i) => (
-                                                <div key={i} className="text-center font-black py-4 border-b-2 border-slate-100 last:border-0">
-                                                    <span className="text-xl uppercase border-b-4 border-red-500 inline-block px-2">{t.from}</span>
-                                                    <span className="mx-2 text-xs italic text-slate-400 font-bold">要畀</span>
-                                                    <span className="text-2xl font-mono text-slate-900 tracking-tighter bg-yellow-100 px-2 font-bold">${t.amount.toFixed(1)}</span>
-                                                    <span className="mx-1 text-[10px] text-slate-400 font-bold">HKD</span>
-                                                    <span className="mx-2 text-xs italic text-slate-400 font-bold">予</span>
-                                                    <span className="text-xl uppercase border-b-4 border-emerald-500 inline-block px-2">{t.to}</span>
+                                                <div key={i} className="text-center font-black py-4 border-b-2 border-slate-900 last:border-0 transition-all">
+                                                    <span className="text-xl uppercase border-b-4 border-rose-500 inline-block px-2 text-white">{t.from}</span>
+                                                    <span className="mx-2 text-xs italic text-slate-500 font-bold uppercase">要畀</span>
+                                                    <span className="text-2xl font-mono text-white tracking-tighter bg-yellow-900/30 px-2 font-bold italic">${t.amount.toFixed(1)}</span>
+                                                    <span className="mx-1 text-[10px] text-slate-500 font-bold uppercase">HKD</span>
+                                                    <span className="mx-2 text-xs italic text-slate-500 font-bold uppercase">予</span>
+                                                    <span className="text-xl uppercase border-b-4 border-emerald-400 inline-block px-2 text-white">{t.to}</span>
                                                 </div>
                                             ))
                                         ) : (
-                                            <div className="text-center py-10 text-slate-200 font-black italic tracking-widest uppercase">Clear! 大家互不相欠</div>
+                                            <div className="text-center py-10 text-slate-700 font-black italic tracking-widest uppercase">大家互不相欠</div>
                                         )}
                                     </div>
                                 </section>
                             </div>
-                            <button onClick={() => { if(confirm('清空數據？')) { localStorage.clear(); window.location.reload(); }}} className="mt-12 w-full text-[10px] font-black text-slate-600 hover:text-red-500 uppercase tracking-[0.4em] font-bold">清空紀錄 Clear History</button>
+                            <button onClick={() => { if(confirm('清空紀錄？清咗就冇晒㗎喇。')) { localStorage.clear(); window.location.reload(); }}} className="mt-12 w-full text-[10px] font-black text-slate-700 hover:text-red-400 uppercase tracking-[0.4em] font-bold">清空紀錄 Clear History</button>
                         </div>
                     )}
 
-                    <footer className="mt-20 text-center text-slate-300 text-[10px] font-black uppercase tracking-[0.5em] pb-12 leading-relaxed font-bold">
-                        Kong • Shing • Angus<br/>Japan Trip v4.1
+                    <footer className="mt-20 text-center text-slate-800 text-[10px] font-black uppercase tracking-[0.5em] pb-12 leading-relaxed font-bold">
+                        Kong • Shing • Angus<br/>Japan Trip
                     </footer>
                 </div>
             );
