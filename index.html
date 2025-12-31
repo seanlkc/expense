@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>日本旅遊開支計算機</title>
+    <title>2026 日本旅遊開支計算機</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -59,7 +59,7 @@
 
         const App = () => {
             const members = ['Kong', 'Shing', 'Angus'];
-            const APP_STORAGE_KEY = 'japan_trip_v6_standard_input';
+            const APP_STORAGE_KEY = 'japan_trip_2026_v1';
 
             const [expenses, setExpenses] = useState(() => {
                 const saved = localStorage.getItem(`${APP_STORAGE_KEY}_list`);
@@ -160,9 +160,9 @@
             return (
                 <div className="max-w-xl mx-auto p-4 bg-slate-950 min-h-screen border-x border-slate-800 shadow-sm font-sans mb-12 select-none">
                     
-                    {/* Header */}
+                    {/* Header - Updated Title */}
                     <div className="flex justify-center items-center border-b-2 border-slate-800 pb-2 mb-6 text-white">
-                        <h1 className="text-xl font-black tracking-tighter italic uppercase text-white">Japan Expense</h1>
+                        <h1 className="text-xl font-black tracking-tighter italic uppercase text-white">2026 JAPAN TRIP EXPENSE</h1>
                     </div>
 
                     {/* 輸入區 */}
@@ -248,7 +248,7 @@
                             </div>
                         </div>
 
-                        <button onClick={addExpense} className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl hover:bg-indigo-700 active:translate-y-1 shadow-lg border-2 border-indigo-900 uppercase tracking-widest text-lg">加入列表 ADD ITEM</button>
+                        <button onClick={addExpense} className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl hover:bg-indigo-700 active:translate-y-1 shadow-lg border-2 border-indigo-900 uppercase tracking-widest text-lg text-white">加入列表 ADD ITEM</button>
                     </div>
 
                     {/* 紀錄清單 */}
@@ -261,7 +261,7 @@
                             {expenses.map((e, index) => (
                                 <div key={e.id} className="bg-slate-900 p-5 border-2 border-slate-800 rounded-2xl flex justify-between items-center shadow-md">
                                     <div className="flex items-center gap-4 flex-1">
-                                        <div className="flex flex-col items-center gap-1 mr-1">
+                                        <div className="flex flex-col items-center gap-1 mr-1 text-slate-500">
                                             <button onClick={() => moveItem(index, 'up')} disabled={index === 0} className={`p-1 rounded-md ${index === 0 ? 'text-slate-800' : 'text-slate-400 active:bg-slate-700'}`}><Icon name="chevron-up" size={18} /></button>
                                             <span className="font-black text-[10px] text-slate-700">#{index + 1}</span>
                                             <button onClick={() => moveItem(index, 'down')} disabled={index === expenses.length - 1} className={`p-1 rounded-md ${index === expenses.length - 1 ? 'text-slate-800' : 'text-slate-400 active:bg-slate-700'}`}><Icon name="chevron-down" size={18} /></button>
@@ -271,7 +271,7 @@
                                             <div className="font-black text-sm text-slate-100 uppercase tracking-tight underline decoration-indigo-500 decoration-2 underline-offset-8">
                                                 {e.description}・{e.amount.toLocaleString()} {e.currency}
                                             </div>
-                                            <div className="font-black text-sm text-slate-100 uppercase tracking-tight underline decoration-emerald-500 decoration-2 underline-offset-8">
+                                            <div className="font-black text-sm text-slate-100 uppercase tracking-tight underline decoration-emerald-500 decoration-2 underline-offset-8 text-white">
                                                 {e.paidBy.toUpperCase()} 出錢・{e.sharedBy.map(p => p.toUpperCase()).join(' / ')} 有份用
                                             </div>
                                         </div>
@@ -279,7 +279,7 @@
                                     <button onClick={() => removeExpense(e.id)} className="text-slate-700 hover:text-red-400 p-2 ml-2 transition-colors self-start mt-2"><Icon name="trash-2" size={20} /></button>
                                 </div>
                             ))}
-                            {expenses.length === 0 && <p className="text-center py-12 text-slate-800 font-black italic border-4 border-dashed border-slate-900 rounded-3xl uppercase tracking-widest">暫無紀錄 No Records</p>}
+                            {expenses.length === 0 && <p className="text-center py-12 text-slate-800 font-black italic border-4 border-dashed border-slate-900 rounded-3xl uppercase tracking-widest text-slate-700">暫無紀錄 No Records</p>}
                         </div>
                     </div>
 
@@ -307,9 +307,9 @@
                     {/* 結算結果 */}
                     {showResult && (
                         <div className="p-8 bg-slate-900 text-white rounded-[3rem] border-2 border-slate-700 mb-10 animate-in fade-in slide-in-from-bottom-5 shadow-2xl">
-                            <h2 className="text-3xl font-black text-center mb-10 italic border-b-2 border-slate-800 pb-4 tracking-tighter uppercase underline decoration-emerald-500">Summary 結算</h2>
+                            <h2 className="text-3xl font-black text-center mb-10 italic border-b-2 border-slate-700 pb-4 tracking-tighter uppercase underline decoration-emerald-500 text-white">Summary 結算</h2>
                             
-                            <div className="space-y-10">
+                            <div className="space-y-10 text-white">
                                 <section>
                                     <h3 className="font-black text-xs text-indigo-300 mb-4 tracking-[0.2em] uppercase">1. 個人應付開支 (Expense)</h3>
                                     <div className="space-y-3 px-2">
@@ -321,7 +321,7 @@
                                         ))}
                                         <div className="pt-4 flex justify-between font-black text-indigo-300">
                                             <span className="text-xs italic uppercase">旅程總額 TOTAL</span>
-                                            <span className="text-2xl font-bold font-mono">${settlementResult.totalInHKD.toFixed(1)}</span>
+                                            <span className="text-2xl font-bold text-white">${settlementResult.totalInHKD.toFixed(1)}</span>
                                         </div>
                                     </div>
                                 </section>
@@ -331,25 +331,25 @@
                                     <div className="space-y-3 px-2 text-emerald-300">
                                         {members.map(m => (
                                             <div key={m} className="flex justify-between items-end border-b border-slate-800 pb-1">
-                                                <span className="font-black text-slate-500 text-sm uppercase">{m}</span>
-                                                <span className="font-black text-xl tracking-tighter font-bold">${settlementResult.totalPaid[m].toFixed(1)}</span>
+                                                <span className="font-black text-slate-500 text-sm uppercase text-slate-500">{m}</span>
+                                                <span className="font-black text-xl tracking-tighter font-bold text-emerald-500">${settlementResult.totalPaid[m].toFixed(1)}</span>
                                             </div>
                                         ))}
                                     </div>
                                 </section>
 
-                                <section className="bg-slate-950 text-white p-6 rounded-[2rem] border border-slate-800 shadow-inner">
+                                <section className="bg-slate-950 text-white p-6 rounded-[2rem] border border-slate-800 shadow-inner text-white">
                                     <h3 className="font-black text-xs text-orange-400 mb-6 tracking-[0.2em] uppercase text-center font-bold">3. 找數指示 Settlement</h3>
                                     <div className="space-y-6">
                                         {settlementResult.transfers.length > 0 ? (
                                             settlementResult.transfers.map((t, i) => (
                                                 <div key={i} className="text-center font-bold py-4 border-b border-slate-900 last:border-0">
-                                                    <span className="text-lg underline decoration-rose-500 decoration-2 underline-offset-8 px-1 uppercase">{t.from}</span>
+                                                    <span className="text-lg underline decoration-rose-500 decoration-2 underline-offset-8 px-1 uppercase text-white">{t.from}</span>
                                                     <span className="mx-2 text-slate-400 font-normal">畀</span>
-                                                    <span className="text-2xl text-white italic tracking-tighter font-black">${t.amount.toFixed(1)}</span>
+                                                    <span className="text-2xl text-white italic tracking-tighter font-black text-white">${t.amount.toFixed(1)}</span>
                                                     <span className="mx-1 text-[10px] text-slate-500 uppercase">HKD</span>
                                                     <span className="mx-2 text-slate-400 font-normal">予</span>
-                                                    <span className="text-lg underline decoration-emerald-500 decoration-2 underline-offset-8 px-1 uppercase">{t.to}</span>
+                                                    <span className="text-lg underline decoration-emerald-500 decoration-2 underline-offset-8 px-1 uppercase text-white">{t.to}</span>
                                                 </div>
                                             ))
                                         ) : (
@@ -363,7 +363,7 @@
                     )}
 
                     <footer className="mt-20 text-center text-slate-800 text-[10px] font-black uppercase tracking-[0.5em] pb-12 leading-relaxed font-bold">
-                        Kong • Shing • Angus<br/>Japan Trip
+                        Kong • Shing • Angus<br/>2026 Japan Trip
                     </footer>
                 </div>
             );
