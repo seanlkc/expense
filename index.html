@@ -23,6 +23,15 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .select-none { -webkit-user-select: none; user-select: none; }
         .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+        /* 移除 number input 的上下小箭頭 */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100">
@@ -50,7 +59,7 @@
 
         const App = () => {
             const members = ['Kong', 'Shing', 'Angus'];
-            const APP_STORAGE_KEY = 'japan_trip_v5_jpy_dark';
+            const APP_STORAGE_KEY = 'japan_trip_v6_standard_input';
 
             const [expenses, setExpenses] = useState(() => {
                 const saved = localStorage.getItem(`${APP_STORAGE_KEY}_list`);
@@ -61,8 +70,8 @@
                 return saved ? parseFloat(saved) : 0.051;
             });
 
-            const [digits, setDigits] = useState([0, 0, 0, 0, 0, 0]);
             const [description, setDescription] = useState('');
+            const [amountStr, setAmountStr] = useState(''); // 金額輸入字串
             const [currency, setCurrency] = useState('JPY'); 
             const [paidBy, setPaidBy] = useState('Kong');
             const [sharedBy, setSharedBy] = useState(['Kong', 'Shing', 'Angus']);
@@ -75,34 +84,23 @@
                 localStorage.setItem(`${APP_STORAGE_KEY}_rate`, rate.toString());
             }, [rate]);
 
-            const currentAmount = digits.reduce((acc, digit, idx) => acc + digit * Math.pow(10, 5 - idx), 0);
-
-            const updateDigit = (index, delta) => {
-                const newDigits = [...digits];
-                let newVal = newDigits[index] + delta;
-                if (newVal > 9) newVal = 0;
-                if (newVal < 0) newVal = 9;
-                newDigits[index] = newVal;
-                setDigits(newDigits);
-                setShowResult(false);
-            };
-
             const addExpense = () => {
-                if (!description || currentAmount === 0 || sharedBy.length === 0) {
-                    alert("請輸入項目名、金額，並勾選享用者");
+                const val = parseFloat(amountStr);
+                if (!description || isNaN(val) || val <= 0 || sharedBy.length === 0) {
+                    alert("請輸入項目名、有效金額，並勾選享用者");
                     return;
                 }
                 const newExpense = {
                     id: Date.now(),
                     description,
-                    amount: currentAmount,
+                    amount: val,
                     currency,
                     paidBy,
                     sharedBy: [...sharedBy]
                 };
                 setExpenses([...expenses, newExpense]);
                 setDescription('');
-                setDigits([0, 0, 0, 0, 0, 0]);
+                setAmountStr('');
                 setShowResult(false);
             };
 
@@ -162,6 +160,7 @@
             return (
                 <div className="max-w-xl mx-auto p-4 bg-slate-950 min-h-screen border-x border-slate-800 shadow-sm font-sans mb-12 select-none">
                     
+                    {/* Header */}
                     <div className="flex justify-center items-center border-b-2 border-slate-800 pb-2 mb-6 text-white">
                         <h1 className="text-xl font-black tracking-tighter italic uppercase text-white">Japan Expense</h1>
                     </div>
@@ -169,6 +168,7 @@
                     {/* 輸入區 */}
                     <div className="space-y-6 border-2 border-slate-800 p-5 rounded-[2rem] bg-slate-900 mb-8 shadow-xl">
                         
+                        {/* 1. 項目名稱 */}
                         <div>
                             <label className="font-black text-xs uppercase tracking-widest text-slate-500 block mb-1">1. 項目名稱 Item Name</label>
                             <input 
@@ -176,10 +176,11 @@
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="例如：拉麵 / 車票"
-                                className="border-2 border-slate-700 p-3 rounded-xl w-full font-bold focus:bg-slate-800 bg-slate-950 text-white outline-none transition-all text-lg placeholder:text-slate-800"
+                                className="border-2 border-slate-700 p-4 rounded-xl w-full font-bold focus:bg-slate-800 bg-slate-950 text-white outline-none transition-all text-lg placeholder:text-slate-800"
                             />
                         </div>
 
+                        {/* 2. 幣值選擇 */}
                         <div>
                             <label className="font-black text-xs uppercase tracking-widest text-slate-500 block mb-2">2. 選擇幣值 Currency</label>
                             <div className="flex bg-slate-950 p-1.5 rounded-2xl gap-1 border-2 border-slate-800">
@@ -191,25 +192,27 @@
                                             ? 'bg-emerald-600 border-emerald-400 text-white shadow-lg scale-[1.02]' 
                                             : 'text-slate-600'}`}
                                     >
-                                        {c === 'JPY' ? '¥ 日圓' : '$ 港幣'}
+                                        {c === 'JPY' ? '¥ JPY' : '$ HKD'}
                                     </button>
                                 ))}
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <label className="font-black text-xs uppercase tracking-widest text-slate-500">3. 金額 Amount</label>
-                            <div className="flex justify-between gap-1.5 bg-slate-800 p-2 rounded-2xl shadow-inner">
-                                {digits.map((d, idx) => (
-                                    <div key={idx} className="flex flex-col items-center flex-1 bg-slate-950 rounded-lg overflow-hidden border border-slate-700">
-                                        <button onClick={() => updateDigit(idx, 1)} className="w-full flex justify-center py-2 bg-slate-900 active:bg-yellow-600 transition-colors"><Icon name="chevron-up" size={18} strokeWidth={4} className="text-slate-500"/></button>
-                                        <div className="text-2xl font-black font-mono py-1.5 text-white">{d}</div>
-                                        <button onClick={() => updateDigit(idx, -1)} className="w-full flex justify-center py-2 bg-slate-900 active:bg-yellow-600 transition-colors"><Icon name="chevron-down" size={18} strokeWidth={4} className="text-slate-500"/></button>
-                                    </div>
-                                ))}
-                            </div>
+                        {/* 3. 金額輸入 (iPhone Number Pad) */}
+                        <div>
+                            <label className="font-black text-xs uppercase tracking-widest text-slate-500 block mb-1">3. 金額 Amount</label>
+                            <input 
+                                type="number" 
+                                pattern="[0-9]*"
+                                inputmode="decimal"
+                                value={amountStr}
+                                onChange={(e) => setAmountStr(e.target.value)}
+                                placeholder="0.00"
+                                className="border-2 border-slate-700 p-4 rounded-xl w-full font-black focus:bg-slate-800 bg-slate-950 text-white outline-none transition-all text-2xl placeholder:text-slate-800 text-right"
+                            />
                         </div>
 
+                        {/* 4. 支付者 */}
                         <div className="pt-2 border-t border-slate-800">
                             <label className="font-black text-[10px] uppercase tracking-widest text-slate-500 mb-2 block">4. 邊個畀錢？ Paid By</label>
                             <div className="flex gap-3">
@@ -227,6 +230,7 @@
                             </div>
                         </div>
 
+                        {/* 5. 享用者 */}
                         <div>
                             <label className="font-black text-[10px] uppercase tracking-widest text-slate-500 mb-2 block">5. 邊個有份？ Share By</label>
                             <div className="flex gap-3">
@@ -303,7 +307,7 @@
                     {/* 結算結果 */}
                     {showResult && (
                         <div className="p-8 bg-slate-900 text-white rounded-[3rem] border-2 border-slate-700 mb-10 animate-in fade-in slide-in-from-bottom-5 shadow-2xl">
-                            <h2 className="text-3xl font-black text-center mb-10 italic border-b-2 border-slate-700 pb-4 tracking-tighter uppercase underline decoration-emerald-500">Summary 結算</h2>
+                            <h2 className="text-3xl font-black text-center mb-10 italic border-b-2 border-slate-800 pb-4 tracking-tighter uppercase underline decoration-emerald-500">Summary 結算</h2>
                             
                             <div className="space-y-10">
                                 <section>
@@ -317,7 +321,7 @@
                                         ))}
                                         <div className="pt-4 flex justify-between font-black text-indigo-300">
                                             <span className="text-xs italic uppercase">旅程總額 TOTAL</span>
-                                            <span className="text-2xl font-bold">${settlementResult.totalInHKD.toFixed(1)}</span>
+                                            <span className="text-2xl font-bold font-mono">${settlementResult.totalInHKD.toFixed(1)}</span>
                                         </div>
                                     </div>
                                 </section>
