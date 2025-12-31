@@ -7,31 +7,30 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        tailwind.config = {
-            darkMode: 'class',
-        }
+        tailwind.config = { darkMode: 'class' }
     </script>
-    <!-- React & Babel for Browser -->
+    <!-- React & Babel -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@0.321.0/dist/umd/lucide.min.js"></script>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore-compat.js"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .select-none { -webkit-user-select: none; user-select: none; }
         .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
-        /* 移除 number input 的上下小箭頭 */
-        input::-webkit-outer-spin-button,
-        input::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        input[type=number] {
-            -moz-appearance: textfield;
-        }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+        .loader { border-top-color: #10b981; animation: spinner 1.5s linear infinite; }
+        @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100">
@@ -40,16 +39,30 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        const firebaseConfig = {
+            apiKey: "AIzaSyCj084ByYe1azZF9v7xhjYteKeaelL_afo",
+            authDomain: "japantrip2026-a402b.firebaseapp.com",
+            projectId: "japantrip2026-a402b",
+            storageBucket: "japantrip2026-a402b.firebasestorage.app",
+            messagingSenderId: "55647352346",
+            appId: "1:55647352346:web:4edf0ee34ad817c07903a3"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+        const appId = "japantrip2026";
+        const collectionPath = `artifacts/${appId}/public/data/expenses`;
+        const ratePath = `artifacts/${appId}/public/data/settings`;
+
         const Icon = ({ name, size = 20, strokeWidth = 2, className = "" }) => {
             const iconRef = useRef(null);
             useEffect(() => {
                 if (window.lucide && iconRef.current) {
                     window.lucide.createIcons({
-                        attrs: {
-                            size: size,
-                            'stroke-width': strokeWidth,
-                            class: className
-                        },
+                        attrs: { size, 'stroke-width': strokeWidth, class: className },
                         nameAttr: 'data-lucide'
                     });
                 }
@@ -59,312 +72,193 @@
 
         const App = () => {
             const members = ['Kong', 'Shing', 'Angus'];
-            const APP_STORAGE_KEY = 'japan_trip_2026_v1';
-
-            const [expenses, setExpenses] = useState(() => {
-                const saved = localStorage.getItem(`${APP_STORAGE_KEY}_list`);
-                return saved ? JSON.parse(saved) : [];
-            });
-            const [rate, setRate] = useState(() => {
-                const saved = localStorage.getItem(`${APP_STORAGE_KEY}_rate`);
-                return saved ? parseFloat(saved) : 0.051;
-            });
-
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [expenses, setExpenses] = useState([]);
+            const [rate, setRate] = useState(0.051);
             const [description, setDescription] = useState('');
-            const [amountStr, setAmountStr] = useState(''); // 金額輸入字串
+            const [amountStr, setAmountStr] = useState('');
             const [currency, setCurrency] = useState('JPY'); 
             const [paidBy, setPaidBy] = useState('Kong');
             const [sharedBy, setSharedBy] = useState(['Kong', 'Shing', 'Angus']);
             const [showResult, setShowResult] = useState(false);
 
             useEffect(() => {
-                localStorage.setItem(`${APP_STORAGE_KEY}_list`, JSON.stringify(expenses));
-            }, [expenses]);
-            useEffect(() => {
-                localStorage.setItem(`${APP_STORAGE_KEY}_rate`, rate.toString());
-            }, [rate]);
+                const initSync = async () => {
+                    try {
+                        // 1. 匿名登入
+                        await auth.signInAnonymously().catch(err => {
+                            throw new Error("請喺 Firebase Console 開啟 'Anonymous' Auth 功能！");
+                        });
+                        
+                        // 2. 監聽開支
+                        const unsubscribeExpenses = db.collection(collectionPath)
+                            .onSnapshot((snapshot) => {
+                                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                                data.sort((a, b) => (a.order || 0) - (b.order || 0));
+                                setExpenses(data);
+                                setLoading(false);
+                            }, (err) => {
+                                setError("Firestore 權限錯誤！請去 Rules 版面改做 allow read, write: if true;");
+                                setLoading(false);
+                            });
 
-            const addExpense = () => {
-                const val = parseFloat(amountStr);
-                if (!description || isNaN(val) || val <= 0 || sharedBy.length === 0) {
-                    alert("請輸入項目名、有效金額，並勾選享用者");
-                    return;
-                }
-                const newExpense = {
-                    id: Date.now(),
-                    description,
-                    amount: val,
-                    currency,
-                    paidBy,
-                    sharedBy: [...sharedBy]
+                        // 3. 監聽匯率
+                        const unsubscribeRate = db.collection(ratePath).doc('rateConfig')
+                            .onSnapshot((doc) => {
+                                if (doc.exists) setRate(doc.data().value);
+                            });
+
+                        return () => {
+                            unsubscribeExpenses();
+                            unsubscribeRate();
+                        };
+                    } catch (e) {
+                        setError(e.message);
+                        setLoading(false);
+                    }
                 };
-                setExpenses([...expenses, newExpense]);
-                setDescription('');
-                setAmountStr('');
-                setShowResult(false);
+                initSync();
+            }, []);
+
+            const addExpense = async () => {
+                const val = parseFloat(amountStr);
+                if (!description || isNaN(val) || val <= 0 || sharedBy.length === 0) return;
+                const maxOrder = expenses.length > 0 ? Math.max(...expenses.map(e => e.order || 0)) : 0;
+                await db.collection(collectionPath).add({
+                    description, amount: val, currency, paidBy, sharedBy: [...sharedBy],
+                    order: maxOrder + 1, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                setDescription(''); setAmountStr('');
             };
 
-            const removeExpense = (id) => {
-                if (confirm('確定刪除？')) {
-                    setExpenses(expenses.filter(e => e.id !== id));
-                    setShowResult(false);
-                }
+            const removeExpense = async (id) => {
+                if (confirm('確定刪除？')) await db.collection(collectionPath).doc(id).delete();
             };
 
-            const moveItem = (index, direction) => {
-                const newExpenses = [...expenses];
+            const moveItem = async (index, direction) => {
                 const targetIndex = direction === 'up' ? index - 1 : index + 1;
-                if (targetIndex < 0 || targetIndex >= newExpenses.length) return;
-                [newExpenses[index], newExpenses[targetIndex]] = [newExpenses[targetIndex], newExpenses[index]];
-                setExpenses(newExpenses);
-                setShowResult(false);
+                if (targetIndex < 0 || targetIndex >= expenses.length) return;
+                const batch = db.batch();
+                batch.update(db.collection(collectionPath).doc(expenses[index].id), { order: expenses[targetIndex].order });
+                batch.update(db.collection(collectionPath).doc(expenses[targetIndex].id), { order: expenses[index].order });
+                await batch.commit();
+            };
+
+            const clearAll = async () => {
+                if(confirm('清空雲端紀錄？')) {
+                    const snap = await db.collection(collectionPath).get();
+                    const batch = db.batch();
+                    snap.docs.forEach(doc => batch.delete(doc.ref));
+                    await batch.commit();
+                }
             };
 
             const calculateSettlement = () => {
-                let individualExpenses = { Kong: 0, Shing: 0, Angus: 0 };
-                let totalPaid = { Kong: 0, Shing: 0, Angus: 0 };
-                let totalInHKD = 0;
-
+                let individual = { Kong: 0, Shing: 0, Angus: 0 }, paid = { Kong: 0, Shing: 0, Angus: 0 }, totalHKD = 0;
                 expenses.forEach(exp => {
-                    const amountInHKD = exp.currency === 'JPY' ? exp.amount * rate : exp.amount;
-                    totalInHKD += amountInHKD;
-                    totalPaid[exp.paidBy] += amountInHKD;
-                    const perPerson = amountInHKD / exp.sharedBy.length;
-                    exp.sharedBy.forEach(p => individualExpenses[p] += perPerson);
+                    const hkd = exp.currency === 'JPY' ? exp.amount * rate : exp.amount;
+                    totalHKD += hkd; paid[exp.paidBy] += hkd;
+                    const per = hkd / exp.sharedBy.length;
+                    exp.sharedBy.forEach(p => individual[p] += per);
                 });
-
-                let balances = {};
-                members.forEach(m => balances[m] = totalPaid[m] - individualExpenses[m]);
-
+                let bal = {}; members.forEach(m => bal[m] = paid[m] - individual[m]);
                 let debtors = [], creditors = [];
-                Object.keys(balances).forEach(p => {
-                    if (balances[p] < -0.01) debtors.push({ name: p, amount: Math.abs(balances[p]) });
-                    else if (balances[p] > 0.01) creditors.push({ name: p, amount: balances[p] });
+                Object.keys(bal).forEach(p => {
+                    if (bal[p] < -0.01) debtors.push({ name: p, amount: Math.abs(bal[p]) });
+                    else if (bal[p] > 0.01) creditors.push({ name: p, amount: bal[p] });
                 });
-
                 let transfers = [];
                 let d = 0, c = 0;
                 while (d < debtors.length && c < creditors.length) {
-                    let tAmount = Math.min(debtors[d].amount, creditors[c].amount);
-                    transfers.push({ from: debtors[d].name, to: creditors[c].name, amount: tAmount });
-                    debtors[d].amount -= tAmount;
-                    creditors[c].amount -= tAmount;
-                    if (debtors[d].amount < 0.01) d++;
-                    if (creditors[c].amount < 0.01) c++;
+                    let t = Math.min(debtors[d].amount, creditors[c].amount);
+                    transfers.push({ from: debtors[d].name, to: creditors[c].name, amount: t });
+                    debtors[d].amount -= t; creditors[c].amount -= t;
+                    if (debtors[d].amount < 0.01) d++; if (creditors[c].amount < 0.01) c++;
                 }
-                return { transfers, individualExpenses, totalPaid, totalInHKD };
+                return { transfers, individual, paid, totalHKD };
             };
 
-            const settlementResult = calculateSettlement();
+            const res = calculateSettlement();
+
+            if (loading) return (
+                <div className="flex flex-col items-center justify-center min-h-screen">
+                    <div className="loader rounded-full border-4 h-12 w-12 mb-4"></div>
+                    <h2 className="text-slate-500 font-black animate-pulse">CONNECTING CLOUD...</h2>
+                </div>
+            );
+
+            if (error) return (
+                <div className="p-10 flex flex-col items-center justify-center min-h-screen text-center">
+                    <Icon name="alert-triangle" size={48} className="text-red-500 mb-4" />
+                    <h2 className="text-xl font-black text-red-500 mb-2 uppercase">Sync Error!</h2>
+                    <p className="text-slate-400 font-bold mb-6">{error}</p>
+                    <button onClick={() => window.location.reload()} className="bg-slate-800 px-6 py-2 rounded-xl font-bold">Retry</button>
+                </div>
+            );
 
             return (
-                <div className="max-w-xl mx-auto p-4 bg-slate-950 min-h-screen border-x border-slate-800 shadow-sm font-sans mb-12 select-none">
+                <div className="max-w-xl mx-auto p-4 bg-slate-950 min-h-screen border-x border-slate-800 font-sans mb-12 select-none">
+                    <div className="flex justify-center border-b-2 border-slate-800 pb-2 mb-6"><h1 className="text-xl font-black italic uppercase">2026 JAPAN TRIP EXPENSE</h1></div>
                     
-                    {/* Header - Updated Title */}
-                    <div className="flex justify-center items-center border-b-2 border-slate-800 pb-2 mb-6 text-white">
-                        <h1 className="text-xl font-black tracking-tighter italic uppercase text-white">2026 JAPAN TRIP EXPENSE</h1>
-                    </div>
-
-                    {/* 輸入區 */}
                     <div className="space-y-6 border-2 border-slate-800 p-5 rounded-[2rem] bg-slate-900 mb-8 shadow-xl">
-                        
-                        {/* 1. 項目名稱 */}
-                        <div>
-                            <label className="font-black text-xs uppercase tracking-widest text-slate-500 block mb-1">1. 項目名稱 Item Name</label>
-                            <input 
-                                type="text" 
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder="例如：拉麵 / 車票"
-                                className="border-2 border-slate-700 p-4 rounded-xl w-full font-bold focus:bg-slate-800 bg-slate-950 text-white outline-none transition-all text-lg placeholder:text-slate-800"
-                            />
-                        </div>
-
-                        {/* 2. 幣值選擇 */}
-                        <div>
-                            <label className="font-black text-xs uppercase tracking-widest text-slate-500 block mb-2">2. 選擇幣值 Currency</label>
-                            <div className="flex bg-slate-950 p-1.5 rounded-2xl gap-1 border-2 border-slate-800">
-                                {['JPY', 'HKD'].map(c => (
-                                    <button
-                                        key={c}
-                                        onClick={() => setCurrency(c)}
-                                        className={`flex-1 py-4 rounded-xl font-black text-xl transition-all ${currency === c 
-                                            ? 'bg-emerald-600 border-emerald-400 text-white shadow-lg scale-[1.02]' 
-                                            : 'text-slate-600'}`}
-                                    >
-                                        {c === 'JPY' ? '¥ JPY' : '$ HKD'}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* 3. 金額輸入 (iPhone Number Pad) */}
-                        <div>
-                            <label className="font-black text-xs uppercase tracking-widest text-slate-500 block mb-1">3. 金額 Amount</label>
-                            <input 
-                                type="number" 
-                                pattern="[0-9]*"
-                                inputmode="decimal"
-                                value={amountStr}
-                                onChange={(e) => setAmountStr(e.target.value)}
-                                placeholder="0.00"
-                                className="border-2 border-slate-700 p-4 rounded-xl w-full font-black focus:bg-slate-800 bg-slate-950 text-white outline-none transition-all text-2xl placeholder:text-slate-800 text-right"
-                            />
-                        </div>
-
-                        {/* 4. 支付者 */}
-                        <div className="pt-2 border-t border-slate-800">
-                            <label className="font-black text-[10px] uppercase tracking-widest text-slate-500 mb-2 block">4. 邊個畀錢？ Paid By</label>
-                            <div className="flex gap-3">
-                                {members.map(m => (
-                                    <button 
-                                        key={m} 
-                                        onClick={() => setPaidBy(m)} 
-                                        className={`flex-1 py-3 rounded-xl font-black text-sm uppercase border-2 transition-all ${paidBy === m 
-                                            ? 'bg-emerald-600 border-emerald-400 text-white shadow-md' 
-                                            : 'border-slate-800 bg-slate-950 text-slate-600'}`}
-                                    >
-                                        {m}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* 5. 享用者 */}
-                        <div>
-                            <label className="font-black text-[10px] uppercase tracking-widest text-slate-500 mb-2 block">5. 邊個有份？ Share By</label>
-                            <div className="flex gap-3">
-                                {members.map(m => (
-                                    <button 
-                                        key={m} 
-                                        onClick={() => setSharedBy(prev => prev.includes(m) ? prev.filter(n => n !== m) : [...prev, m])} 
-                                        className={`flex-1 py-3 rounded-xl font-black text-sm uppercase border-2 transition-all ${sharedBy.includes(m) 
-                                            ? 'bg-emerald-600 border-emerald-400 text-white shadow-md' 
-                                            : 'border-slate-800 bg-slate-950 text-slate-600'}`}
-                                    >
-                                        {m}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <button onClick={addExpense} className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl hover:bg-indigo-700 active:translate-y-1 shadow-lg border-2 border-indigo-900 uppercase tracking-widest text-lg text-white">加入列表 ADD ITEM</button>
+                        <div><label className="font-black text-xs uppercase text-slate-500 block mb-1">1. Item Name</label><input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="例如：拉麵" className="border-2 border-slate-700 p-4 rounded-xl w-full font-bold bg-slate-950 outline-none text-lg placeholder:text-slate-800" /></div>
+                        <div><label className="font-black text-xs uppercase text-slate-500 block mb-2">2. Currency</label><div className="flex bg-slate-950 p-1.5 rounded-2xl gap-1 border-2 border-slate-800">{['JPY', 'HKD'].map(c => (<button key={c} onClick={() => setCurrency(c)} className={`flex-1 py-4 rounded-xl font-black text-xl ${currency === c ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-600'}`}>{c === 'JPY' ? '¥ JPY' : '$ HKD'}</button>))}</div></div>
+                        <div><label className="font-black text-xs uppercase text-slate-500 block mb-1">3. Amount</label><input type="number" inputmode="decimal" value={amountStr} onChange={(e) => setAmountStr(e.target.value)} placeholder="0.00" className="border-2 border-slate-700 p-4 rounded-xl w-full font-black bg-slate-950 outline-none text-2xl text-right" /></div>
+                        <div className="pt-2 border-t border-slate-800"><label className="font-black text-[10px] uppercase text-slate-500 mb-2 block">4. Paid By</label><div className="flex gap-3">{members.map(m => (<button key={m} onClick={() => setPaidBy(m)} className={`flex-1 py-3 rounded-xl font-black text-sm uppercase border-2 ${paidBy === m ? 'bg-emerald-600 text-white' : 'border-slate-800 bg-slate-950 text-slate-600'}`}>{m}</button>))}</div></div>
+                        <div><label className="font-black text-[10px] uppercase text-slate-500 mb-2 block">5. Share By</label><div className="flex gap-3">{members.map(m => (<button key={m} onClick={() => setSharedBy(prev => prev.includes(m) ? prev.filter(n => n !== m) : [...prev, m])} className={`flex-1 py-3 rounded-xl font-black text-sm uppercase border-2 ${sharedBy.includes(m) ? 'bg-emerald-600 text-white' : 'border-slate-800 bg-slate-950 text-slate-600'}`}>{m}</button>))}</div></div>
+                        <button onClick={addExpense} className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl border-2 border-indigo-900 uppercase tracking-widest text-lg">ADD ITEM</button>
                     </div>
 
-                    {/* 紀錄清單 */}
                     <div className="mb-8">
-                        <h2 className="font-black text-xs uppercase tracking-wider text-slate-500 mb-4 px-1 flex justify-between">
-                            <span>紀錄 LIST ({expenses.length})</span>
-                            <span className="italic opacity-30">★ AUTO-SAVED</span>
-                        </h2>
+                        <h2 className="font-black text-xs uppercase text-slate-500 mb-4 px-1 flex justify-between"><span>LIST ({expenses.length})</span><span className="flex items-center gap-1 text-emerald-500 italic animate-pulse"><Icon name="cloud" size={10} /> SYNCED</span></h2>
                         <div className="space-y-4">
                             {expenses.map((e, index) => (
                                 <div key={e.id} className="bg-slate-900 p-5 border-2 border-slate-800 rounded-2xl flex justify-between items-center shadow-md">
                                     <div className="flex items-center gap-4 flex-1">
-                                        <div className="flex flex-col items-center gap-1 mr-1 text-slate-500">
-                                            <button onClick={() => moveItem(index, 'up')} disabled={index === 0} className={`p-1 rounded-md ${index === 0 ? 'text-slate-800' : 'text-slate-400 active:bg-slate-700'}`}><Icon name="chevron-up" size={18} /></button>
+                                        <div className="flex flex-col items-center gap-1 text-slate-500">
+                                            <button onClick={() => moveItem(index, 'up')} disabled={index === 0} className={index === 0 ? 'text-slate-800' : 'text-slate-400'}><Icon name="chevron-up" size={18} /></button>
                                             <span className="font-black text-[10px] text-slate-700">#{index + 1}</span>
-                                            <button onClick={() => moveItem(index, 'down')} disabled={index === expenses.length - 1} className={`p-1 rounded-md ${index === expenses.length - 1 ? 'text-slate-800' : 'text-slate-400 active:bg-slate-700'}`}><Icon name="chevron-down" size={18} /></button>
+                                            <button onClick={() => moveItem(index, 'down')} disabled={index === expenses.length - 1} className={index === expenses.length - 1 ? 'text-slate-800' : 'text-slate-400'}><Icon name="chevron-down" size={18} /></button>
                                         </div>
-                                        
                                         <div className="flex-1 space-y-4">
-                                            <div className="font-black text-sm text-slate-100 uppercase tracking-tight underline decoration-indigo-500 decoration-2 underline-offset-8">
-                                                {e.description}・{e.amount.toLocaleString()} {e.currency}
-                                            </div>
-                                            <div className="font-black text-sm text-slate-100 uppercase tracking-tight underline decoration-emerald-500 decoration-2 underline-offset-8 text-white">
-                                                {e.paidBy.toUpperCase()} 出錢・{e.sharedBy.map(p => p.toUpperCase()).join(' / ')} 有份用
-                                            </div>
+                                            <div className="font-black text-sm text-slate-100 uppercase tracking-tight underline decoration-indigo-500 decoration-2 underline-offset-8">{e.description}・{e.amount.toLocaleString()} {e.currency}</div>
+                                            <div className="font-black text-sm text-slate-100 uppercase tracking-tight underline decoration-emerald-500 decoration-2 underline-offset-8">{e.paidBy.toUpperCase()} 出錢・{e.sharedBy.map(p => p.toUpperCase()).join(' / ')} 有份用</div>
                                         </div>
                                     </div>
-                                    <button onClick={() => removeExpense(e.id)} className="text-slate-700 hover:text-red-400 p-2 ml-2 transition-colors self-start mt-2"><Icon name="trash-2" size={20} /></button>
+                                    <button onClick={() => removeExpense(e.id)} className="text-slate-700 hover:text-red-400 p-2 ml-2 self-start mt-2"><Icon name="trash-2" size={20} /></button>
                                 </div>
                             ))}
-                            {expenses.length === 0 && <p className="text-center py-12 text-slate-800 font-black italic border-4 border-dashed border-slate-900 rounded-3xl uppercase tracking-widest text-slate-700">暫無紀錄 No Records</p>}
                         </div>
                     </div>
 
-                    {/* 匯率 */}
                     {expenses.length > 0 && (
                         <div className="mb-8 p-6 bg-yellow-600 border-2 border-slate-800 rounded-[2rem] shadow-lg">
-                            <div className="flex items-center justify-between text-slate-950">
-                                <div className="flex items-center gap-2">
-                                    <Icon name="settings-2" size={20} />
-                                    <h2 className="font-black text-xs uppercase tracking-widest font-bold">目前匯率 RATE</h2>
-                                </div>
+                            <div className="flex justify-between items-center text-slate-950">
+                                <div className="flex items-center gap-2"><Icon name="settings-2" size={20} /><h2 className="font-black text-xs font-bold">RATE</h2></div>
                                 <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border-2 border-slate-800 text-white">
-                                    <span className="text-[10px] font-black text-slate-500 font-bold uppercase">1¥ =</span>
-                                    <input type="number" step="0.0001" value={rate} onChange={(e) => { setRate(parseFloat(e.target.value) || 0); setShowResult(false); }} className="w-16 font-mono font-black text-white outline-none text-right text-xs bg-transparent" />
-                                    <span className="font-black text-white text-[10px] font-bold uppercase">HKD</span>
+                                    <span className="text-[10px] font-black text-slate-500 uppercase">1¥ =</span>
+                                    <input type="number" step="0.0001" value={rate} onChange={(e) => db.collection(ratePath).doc('rateConfig').set({ value: parseFloat(e.target.value) || 0 })} className="w-16 font-mono font-black text-white text-right text-xs bg-transparent outline-none" />
+                                    <span className="text-[10px] font-bold">HKD</span>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    <button onClick={() => setShowResult(true)} className={`w-full font-black py-5 rounded-[2rem] text-xl shadow-lg border-2 border-slate-800 transition-all active:translate-y-1 active:shadow-none flex items-center justify-center gap-3 mb-10 ${expenses.length > 0 ? 'bg-white text-slate-950' : 'bg-slate-900 text-slate-700 cursor-not-allowed'}`} disabled={expenses.length === 0}>
-                        <Icon name="calculator" size={28} strokeWidth={3} /> 撳我計數 CALCULATE
-                    </button>
+                    <button onClick={() => setShowResult(true)} className={`w-full font-black py-5 rounded-[2rem] text-xl border-2 border-slate-800 ${expenses.length > 0 ? 'bg-white text-slate-950' : 'bg-slate-900 text-slate-700'}`} disabled={expenses.length === 0}><Icon name="calculator" size={28} /> CALCULATE</button>
 
-                    {/* 結算結果 */}
                     {showResult && (
-                        <div className="p-8 bg-slate-900 text-white rounded-[3rem] border-2 border-slate-700 mb-10 animate-in fade-in slide-in-from-bottom-5 shadow-2xl">
-                            <h2 className="text-3xl font-black text-center mb-10 italic border-b-2 border-slate-700 pb-4 tracking-tighter uppercase underline decoration-emerald-500 text-white">Summary 結算</h2>
-                            
-                            <div className="space-y-10 text-white">
-                                <section>
-                                    <h3 className="font-black text-xs text-indigo-300 mb-4 tracking-[0.2em] uppercase">1. 個人應付開支 (Expense)</h3>
-                                    <div className="space-y-3 px-2">
-                                        {members.map(m => (
-                                            <div key={m} className="flex justify-between items-end border-b border-slate-800 pb-1">
-                                                <span className="font-black text-slate-500 text-sm uppercase">{m}</span>
-                                                <span className="font-black text-xl tracking-tighter text-white">${settlementResult.individualExpenses[m].toFixed(1)}</span>
-                                            </div>
-                                        ))}
-                                        <div className="pt-4 flex justify-between font-black text-indigo-300">
-                                            <span className="text-xs italic uppercase">旅程總額 TOTAL</span>
-                                            <span className="text-2xl font-bold text-white">${settlementResult.totalInHKD.toFixed(1)}</span>
-                                        </div>
-                                    </div>
-                                </section>
-
-                                <section>
-                                    <h3 className="font-black text-xs text-emerald-300 mb-4 tracking-[0.2em] uppercase">2. 個人已付總額 (Paid Out)</h3>
-                                    <div className="space-y-3 px-2 text-emerald-300">
-                                        {members.map(m => (
-                                            <div key={m} className="flex justify-between items-end border-b border-slate-800 pb-1">
-                                                <span className="font-black text-slate-500 text-sm uppercase text-slate-500">{m}</span>
-                                                <span className="font-black text-xl tracking-tighter font-bold text-emerald-500">${settlementResult.totalPaid[m].toFixed(1)}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </section>
-
-                                <section className="bg-slate-950 text-white p-6 rounded-[2rem] border border-slate-800 shadow-inner text-white">
-                                    <h3 className="font-black text-xs text-orange-400 mb-6 tracking-[0.2em] uppercase text-center font-bold">3. 找數指示 Settlement</h3>
-                                    <div className="space-y-6">
-                                        {settlementResult.transfers.length > 0 ? (
-                                            settlementResult.transfers.map((t, i) => (
-                                                <div key={i} className="text-center font-bold py-4 border-b border-slate-900 last:border-0">
-                                                    <span className="text-lg underline decoration-rose-500 decoration-2 underline-offset-8 px-1 uppercase text-white">{t.from}</span>
-                                                    <span className="mx-2 text-slate-400 font-normal">畀</span>
-                                                    <span className="text-2xl text-white italic tracking-tighter font-black text-white">${t.amount.toFixed(1)}</span>
-                                                    <span className="mx-1 text-[10px] text-slate-500 uppercase">HKD</span>
-                                                    <span className="mx-2 text-slate-400 font-normal">予</span>
-                                                    <span className="text-lg underline decoration-emerald-500 decoration-2 underline-offset-8 px-1 uppercase text-white">{t.to}</span>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="text-center py-10 text-slate-700 font-black italic tracking-widest uppercase text-xs">大家互不相欠</div>
-                                        )}
-                                    </div>
-                                </section>
+                        <div className="p-8 bg-slate-900 text-white rounded-[3rem] border-2 border-slate-700 mb-10 shadow-2xl">
+                            <h2 className="text-3xl font-black text-center mb-10 italic border-b-2 border-slate-800 pb-4 uppercase underline decoration-emerald-500">Summary</h2>
+                            <div className="space-y-10">
+                                <section><h3 className="font-black text-xs text-indigo-300 mb-4 tracking-[0.2em] uppercase">1. Expense</h3><div className="space-y-3 px-2">{members.map(m => (<div key={m} className="flex justify-between items-end border-b border-slate-800 pb-1"><span className="text-slate-500 text-sm uppercase">{m}</span><span className="font-black text-xl text-white">${res.individual[m].toFixed(1)}</span></div>))}<div className="pt-4 flex justify-between font-black text-indigo-300 text-2xl"><span>TOTAL</span><span>${res.totalHKD.toFixed(1)}</span></div></div></section>
+                                <section><h3 className="font-black text-xs text-emerald-300 mb-4 tracking-[0.2em] uppercase">2. Paid Out</h3><div className="space-y-3 px-2 text-emerald-300">{members.map(m => (<div key={m} className="flex justify-between items-end border-b border-slate-800 pb-1"><span>{m}</span><span className="font-black text-xl">${res.paid[m].toFixed(1)}</span></div>))}</div></section>
+                                <section className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 shadow-inner"><h3 className="font-black text-xs text-orange-400 mb-6 tracking-[0.2em] uppercase text-center font-bold">3. Settlement</h3><div className="space-y-6">{res.transfers.length > 0 ? res.transfers.map((t, i) => (<div key={i} className="text-center font-bold py-4 border-b border-slate-900 last:border-0"><span className="text-lg underline decoration-rose-500 decoration-2 underline-offset-8 px-1 uppercase">{t.from}</span><span className="mx-2 text-slate-500">畀</span><span className="text-2xl text-white italic font-black">${t.amount.toFixed(1)}</span><span className="mx-2 text-slate-500">予</span><span className="text-lg underline decoration-emerald-500 decoration-2 underline-offset-8 px-1 uppercase">{t.to}</span></div>)) : <div className="text-center py-10 text-slate-700 italic text-xs uppercase">大家互不相欠</div>}</div></section>
                             </div>
-                            <button onClick={() => { if(confirm('清空紀錄？清咗就冇晒㗎喇。')) { localStorage.clear(); window.location.reload(); }}} className="mt-12 w-full text-[10px] font-black text-slate-700 hover:text-red-400 uppercase tracking-[0.4em] font-bold py-4 transition-colors">清空紀錄 Clear History</button>
+                            <button onClick={clearAll} className="mt-12 w-full text-[10px] font-black text-slate-700 hover:text-red-400 uppercase py-4">Clear History</button>
                         </div>
                     )}
-
-                    <footer className="mt-20 text-center text-slate-800 text-[10px] font-black uppercase tracking-[0.5em] pb-12 leading-relaxed font-bold">
-                        Kong • Shing • Angus<br/>2026 Japan Trip
-                    </footer>
+                    <footer className="mt-20 text-center text-slate-800 text-[10px] font-black uppercase tracking-[0.5em] pb-12 leading-relaxed">Kong • Shing • Angus<br/>2026 Japan Trip</footer>
                 </div>
             );
         };
